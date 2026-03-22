@@ -21,8 +21,8 @@ export class CodexAdapter implements AgentAdapter {
     this.timeoutMs = timeoutMs;
     this.codexConfig = {
       sandboxMode: codexConfig?.sandboxMode ?? "workspace-write",
-      webSearchMode: codexConfig?.webSearchMode ?? "disabled",
-      networkAccessEnabled: codexConfig?.networkAccessEnabled ?? false,
+      webSearchMode: codexConfig?.webSearchMode ?? "live",
+      networkAccessEnabled: codexConfig?.networkAccessEnabled ?? true,
       approvalPolicy: codexConfig?.approvalPolicy ?? "never",
       model: codexConfig?.model,
       modelReasoningEffort: codexConfig?.modelReasoningEffort,

@@ -27,8 +27,8 @@ const defaultConfig: OrchestratorConfig = {
   outputFormat: "text",
   codex: {
     sandboxMode: "workspace-write",
-    webSearchMode: "disabled",
-    networkAccessEnabled: false,
+    webSearchMode: "live",
+    networkAccessEnabled: true,
     approvalPolicy: "never",
   },
 };

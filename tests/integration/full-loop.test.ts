@@ -28,8 +28,8 @@ describe("Full collaboration loop", () => {
     outputFormat: "text",
     codex: {
       sandboxMode: "workspace-write",
-      webSearchMode: "disabled",
-      networkAccessEnabled: false,
+      webSearchMode: "live",
+      networkAccessEnabled: true,
       approvalPolicy: "never",
     },
   };

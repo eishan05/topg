@@ -75,7 +75,7 @@ describe("CodexAdapter", () => {
     expect(adapter.name).toBe("codex");
   });
 
-  it("should pass default thread options", async () => {
+  it("should pass default thread options with capabilities enabled", async () => {
     const adapter = new CodexAdapter();
     await adapter.send("Review this code", ctx);
 
@@ -83,6 +83,8 @@ describe("CodexAdapter", () => {
       workingDirectory: "/tmp",
       sandboxMode: "workspace-write",
       approvalPolicy: "never",
+      webSearchMode: "live",
+      networkAccessEnabled: true,
     });
   });
 
@@ -143,11 +145,11 @@ describe("CodexAdapter", () => {
   });
 
   it("should allow runtime config updates", async () => {
-    const adapter = new CodexAdapter();
-    adapter.updateConfig({ webSearchMode: "live", networkAccessEnabled: true });
+    const adapter = new CodexAdapter(120_000, { webSearchMode: "disabled", networkAccessEnabled: false });
+    adapter.updateConfig({ webSearchMode: "cached", networkAccessEnabled: true });
     await adapter.send("Review this code", ctx);
 
-    expect(lastThreadOptions.webSearchMode).toBe("live");
+    expect(lastThreadOptions.webSearchMode).toBe("cached");
     expect(lastThreadOptions.networkAccessEnabled).toBe(true);
   });
 

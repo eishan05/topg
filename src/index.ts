@@ -34,8 +34,9 @@ program
   .option("--transcript <path>", "Save full transcript to path")
   .option("--resume <sessionId>", "Resume a paused session")
   .option("--codex-sandbox <mode>", "Codex sandbox mode (read-only, workspace-write, danger-full-access)", "workspace-write")
-  .option("--codex-web-search <mode>", "Codex web search (disabled, cached, live)", "disabled")
-  .option("--codex-network", "Enable network access for Codex", false)
+  .option("--codex-web-search <mode>", "Codex web search (disabled, cached, live)", "live")
+  .option("--codex-network", "Enable network access for Codex", true)
+  .option("--no-codex-network", "Disable network access for Codex")
   .option("--codex-model <model>", "Override model for Codex agent")
   .option("--codex-reasoning <effort>", "Codex reasoning effort (minimal, low, medium, high, xhigh)")
   .action(async (prompt: string | undefined, opts) => {

@@ -60,8 +60,8 @@ export interface CodexConfig {
 
 export const DEFAULT_CODEX_CONFIG: CodexConfig = {
   sandboxMode: "workspace-write",
-  webSearchMode: "disabled",
-  networkAccessEnabled: false,
+  webSearchMode: "live",
+  networkAccessEnabled: true,
   approvalPolicy: "never",
 };
 
