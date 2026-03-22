@@ -139,14 +139,23 @@ export function createTopgServer(opts: TopgServerOptions) {
       codex,
       sessionManager,
       config,
-      (turn, agent, role) => {
-        broadcast({
-          type: "turn.start",
-          sessionId,
-          turn,
-          agent,
-          role,
-        });
+      {
+        onTurnStart: (turn, agent, role) => {
+          broadcast({
+            type: "turn.start",
+            sessionId,
+            turn,
+            agent,
+            role,
+          });
+        },
+        onTurnComplete: (message) => {
+          broadcast({
+            type: "turn.complete",
+            sessionId,
+            message,
+          });
+        },
       },
     );
     return orchestrator;
