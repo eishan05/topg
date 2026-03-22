@@ -99,20 +99,39 @@ describe("WebSocket Server", () => {
     }
   });
 
-  it("returns not_implemented for debate control messages", async () => {
+  it("returns validation/not_found errors for debate control messages without required fields", async () => {
     const { ws, firstMessage } = openWs(port);
     try {
       // Wait for the initial sessions.list message
       await firstMessage;
 
-      for (const type of ["debate.start", "debate.steer", "debate.pause", "debate.resume"]) {
-        const nextMsg = wsMessage(ws);
-        ws.send(JSON.stringify({ type }));
-        const msg = await nextMsg;
-        expect(msg.type).toBe("error");
-        expect(msg.code).toBe("not_implemented");
-        expect(msg.message).toBe("Coming soon");
-      }
+      // debate.start without prompt -> validation_error
+      let nextMsg = wsMessage(ws);
+      ws.send(JSON.stringify({ type: "debate.start" }));
+      let msg = await nextMsg;
+      expect(msg.type).toBe("error");
+      expect(msg.code).toBe("validation_error");
+
+      // debate.steer without sessionId -> validation_error
+      nextMsg = wsMessage(ws);
+      ws.send(JSON.stringify({ type: "debate.steer" }));
+      msg = await nextMsg;
+      expect(msg.type).toBe("error");
+      expect(msg.code).toBe("validation_error");
+
+      // debate.pause with unknown sessionId -> not_found
+      nextMsg = wsMessage(ws);
+      ws.send(JSON.stringify({ type: "debate.pause", sessionId: "unknown" }));
+      msg = await nextMsg;
+      expect(msg.type).toBe("error");
+      expect(msg.code).toBe("not_found");
+
+      // debate.resume without sessionId -> validation_error
+      nextMsg = wsMessage(ws);
+      ws.send(JSON.stringify({ type: "debate.resume" }));
+      msg = await nextMsg;
+      expect(msg.type).toBe("error");
+      expect(msg.code).toBe("validation_error");
     } finally {
       ws.close();
     }
