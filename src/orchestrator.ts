@@ -96,36 +96,29 @@ export class Orchestrator {
       [currentReviewer, currentInitiator] = [currentInitiator, currentReviewer];
     }
 
-    // Escalation: ask both for final summaries
+    // Escalation: ask both for final summaries (in parallel, independent context)
     turn++;
     const escPrompt = escalationPrompt();
+    const messagesBeforeEsc = [...messages];
 
     this.onTurnStart?.(turn, this.agentA.name, "escalation");
-    const escResponseA = await this.agentA.send(
-      formatTurnPrompt(escPrompt, messages, userPrompt),
-      {
-        sessionId: meta.sessionId,
-        history: messages,
-        workingDirectory: this.config.workingDirectory,
-        systemPrompt: escPrompt,
-      }
-    );
-    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escResponseA);
-    messages.push(escMsgA);
-    this.session.appendMessage(meta.sessionId, escMsgA);
-
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
-    const escResponseB = await this.agentB.send(
-      formatTurnPrompt(escPrompt, messages, userPrompt),
-      {
-        sessionId: meta.sessionId,
-        history: messages,
-        workingDirectory: this.config.workingDirectory,
-        systemPrompt: escPrompt,
-      }
-    );
+
+    const [escResponseA, escResponseB] = await Promise.all([
+      this.agentA.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userPrompt),
+        { sessionId: meta.sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt }
+      ),
+      this.agentB.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userPrompt),
+        { sessionId: meta.sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt }
+      ),
+    ]);
+
+    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escResponseA);
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escResponseB);
-    messages.push(escMsgB);
+    messages.push(escMsgA, escMsgB);
+    this.session.appendMessage(meta.sessionId, escMsgA);
     this.session.appendMessage(meta.sessionId, escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), this.config.guardrailRounds);
@@ -200,28 +193,31 @@ export class Orchestrator {
       [currentReviewer, currentInitiator] = [currentInitiator, currentReviewer];
     }
 
-    // Escalation
+    // Escalation (in parallel, independent context)
     turn++;
     const escPrompt = escalationPrompt();
+    const messagesBeforeEsc = [...messages];
 
     this.onTurnStart?.(turn, this.agentA.name, "escalation");
-    const escA = await this.agentA.send(
-      formatTurnPrompt(escPrompt, messages, userPrompt),
-      { sessionId, history: messages, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
-      signal
-    );
-    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
-    messages.push(escMsgA);
-    this.session.appendMessage(sessionId, escMsgA);
-
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
-    const escB = await this.agentB.send(
-      formatTurnPrompt(escPrompt, messages, userPrompt),
-      { sessionId, history: messages, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
-      signal
-    );
+
+    const [escA, escB] = await Promise.all([
+      this.agentA.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userPrompt),
+        { sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
+        signal
+      ),
+      this.agentB.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userPrompt),
+        { sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
+        signal
+      ),
+    ]);
+
+    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escB);
-    messages.push(escMsgB);
+    messages.push(escMsgA, escMsgB);
+    this.session.appendMessage(sessionId, escMsgA);
     this.session.appendMessage(sessionId, escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), turn);
@@ -292,26 +288,29 @@ export class Orchestrator {
       [currentReviewer, currentInitiator] = [currentInitiator, currentReviewer];
     }
 
-    // Escalation
+    // Escalation (in parallel, independent context)
     turn++;
     const escPrompt = escalationPrompt();
+    const messagesBeforeEsc = [...messages];
 
     this.onTurnStart?.(turn, this.agentA.name, "escalation");
-    const escA = await this.agentA.send(
-      formatTurnPrompt(escPrompt, messages, userPrompt),
-      { sessionId, history: messages, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt }
-    );
-    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
-    messages.push(escMsgA);
-    this.session.appendMessage(sessionId, escMsgA);
-
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
-    const escB = await this.agentB.send(
-      formatTurnPrompt(escPrompt, messages, userPrompt),
-      { sessionId, history: messages, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt }
-    );
+
+    const [escA, escB] = await Promise.all([
+      this.agentA.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userPrompt),
+        { sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt }
+      ),
+      this.agentB.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userPrompt),
+        { sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt }
+      ),
+    ]);
+
+    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escB);
-    messages.push(escMsgB);
+    messages.push(escMsgA, escMsgB);
+    this.session.appendMessage(sessionId, escMsgA);
     this.session.appendMessage(sessionId, escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), turn);
@@ -393,28 +392,31 @@ export class Orchestrator {
       [currentReviewer, currentInitiator] = [currentInitiator, currentReviewer];
     }
 
-    // Escalate again
+    // Escalate again (in parallel, independent context)
     turn++;
     const escPrompt = escalationPrompt();
+    const messagesBeforeEsc = [...messages];
 
     this.onTurnStart?.(turn, this.agentA.name, "escalation");
-    const escA = await this.agentA.send(
-      formatTurnPrompt(escPrompt, messages, userGuidance),
-      { sessionId, history: messages, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
-      signal
-    );
-    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
-    messages.push(escMsgA);
-    this.session.appendMessage(sessionId, escMsgA);
-
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
-    const escB = await this.agentB.send(
-      formatTurnPrompt(escPrompt, messages, userGuidance),
-      { sessionId, history: messages, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
-      signal
-    );
+
+    const [escA, escB] = await Promise.all([
+      this.agentA.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userGuidance),
+        { sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
+        signal
+      ),
+      this.agentB.send(
+        formatTurnPrompt(escPrompt, messagesBeforeEsc, userGuidance),
+        { sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt },
+        signal
+      ),
+    ]);
+
+    const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escB);
-    messages.push(escMsgB);
+    messages.push(escMsgA, escMsgB);
+    this.session.appendMessage(sessionId, escMsgA);
     this.session.appendMessage(sessionId, escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), turn);
