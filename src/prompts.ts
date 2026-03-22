@@ -68,12 +68,16 @@ Instructions:
 
 import type { Message } from "./types.js";
 
+function escapeTurnContent(content: string): string {
+  return content.replace(/<\/turn>/gi, "&lt;/turn&gt;");
+}
+
 export function formatConversationHistory(messages: Message[]): string {
   if (messages.length === 0) return "";
   let history = "## Conversation So Far\n\n";
   for (const msg of messages) {
     history += `<turn number="${msg.turn}" agent="${msg.agent}" role="${msg.role}">\n`;
-    history += `${msg.content}\n`;
+    history += `${escapeTurnContent(msg.content)}\n`;
     history += `</turn>\n\n`;
   }
   return history;
@@ -92,9 +96,11 @@ export function summarizeHistory(messages: Message[], keepRecent: number = 4): {
   const userGuidanceEntries: string[] = [];
 
   for (const msg of older) {
-    // Separate user-prompt and guidance messages from agent positions
-    if (msg.type === "user-prompt" || msg.content.startsWith("[USER GUIDANCE]:")) {
-      const guidance = msg.content.replace(/^\[USER (?:GUIDANCE|PROMPT[^\]]*)\]:\s*/i, "").trim();
+    // Filter out user messages (prompts and guidance) — these must not be
+    // attributed as agent positions. The type check is authoritative; the
+    // content check is a defensive fallback for legacy session data.
+    if (msg.type === "user-prompt" || msg.content.startsWith("[USER GUIDANCE]:") || msg.content.startsWith("[USER PROMPT")) {
+      const guidance = msg.content.replace(/^\[USER[^\]]*\]:\s*/i, "").trim();
       userGuidanceEntries.push(`Turn ${msg.turn}: User said: ${guidance.split("\n")[0]}`);
       continue;
     }

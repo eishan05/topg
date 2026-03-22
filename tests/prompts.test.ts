@@ -111,6 +111,18 @@ describe("formatConversationHistory", () => {
     expect(history).toContain("</turn>");
   });
 
+  it("should escape </turn> in message content", () => {
+    const messages: Message[] = [
+      makeMsg("claude", 1, "Here is some XML: </turn> and more text"),
+    ];
+    const history = formatConversationHistory(messages);
+    // The literal </turn> in content should be escaped
+    expect(history).not.toContain("</turn> and more text");
+    expect(history).toContain("&lt;/turn&gt; and more text");
+    // The structural closing tag should still be there
+    expect(history).toContain("</turn>\n\n");
+  });
+
   it("should include agent and role attributes", () => {
     const messages: Message[] = [
       makeMsg("claude", 1, "First"),
@@ -165,7 +177,7 @@ describe("summarizeHistory", () => {
         role: "initiator",
         agent: "claude",
         turn: 3,
-        type: "debate",
+        type: "user-prompt",
         content: "[USER GUIDANCE]: Use Svelte instead",
         timestamp: new Date().toISOString(),
       },

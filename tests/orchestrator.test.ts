@@ -92,6 +92,50 @@ describe("Orchestrator", () => {
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  it("should preserve partial escalation when one agent fails", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-orch-"));
+    const session = new SessionManager(tmpDir);
+
+    // Claude succeeds, Codex fails on escalation call (4th call = escalation)
+    let claudeCallCount = 0;
+    const claude: AgentAdapter = {
+      name: "claude",
+      send: vi.fn(async () => {
+        claudeCallCount++;
+        return { content: "My escalation summary.\n[CONVERGENCE: disagree]", convergenceSignal: "disagree" as const };
+      }),
+    };
+
+    let codexCallCount = 0;
+    const codex: AgentAdapter = {
+      name: "codex",
+      send: vi.fn(async () => {
+        codexCallCount++;
+        // First call succeeds (review loop), second call (escalation) fails
+        if (codexCallCount > 1) {
+          throw new Error("Codex API timeout");
+        }
+        return { content: "Disagree.\n[CONVERGENCE: disagree]", convergenceSignal: "disagree" as const };
+      }),
+    };
+
+    const config = { ...defaultConfig, guardrailRounds: 3 };
+    const orch = new Orchestrator(claude, codex, session, config);
+    const result = await orch.run("What frontend framework?");
+
+    expect(result.type).toBe("escalation");
+    // Claude's response should be preserved
+    const claudeEsc = result.messages.find(m => m.type === "deadlock" && m.agent === "claude");
+    expect(claudeEsc).toBeDefined();
+    expect(claudeEsc!.content).toContain("My escalation summary");
+    // Codex's failure should be captured, not lost
+    const codexEsc = result.messages.find(m => m.type === "deadlock" && m.agent === "codex");
+    expect(codexEsc).toBeDefined();
+    expect(codexEsc!.content).toContain("Escalation failed");
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
 });
 
 describe("runWithHistory", () => {
