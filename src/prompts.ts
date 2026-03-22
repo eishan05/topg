@@ -89,7 +89,16 @@ export function summarizeHistory(messages: Message[], keepRecent: number = 4): {
   const agreements: string[] = [];
   const positions = new Map<string, string>();
 
+  const userGuidanceEntries: string[] = [];
+
   for (const msg of older) {
+    // Separate user-prompt and guidance messages from agent positions
+    if (msg.type === "user-prompt" || msg.content.startsWith("[USER GUIDANCE]:")) {
+      const guidance = msg.content.replace(/^\[USER (?:GUIDANCE|PROMPT[^\]]*)\]:\s*/i, "").trim();
+      userGuidanceEntries.push(`Turn ${msg.turn}: User said: ${guidance.split("\n")[0]}`);
+      continue;
+    }
+
     const label = msg.agent.charAt(0).toUpperCase() + msg.agent.slice(1);
     const firstLine = msg.content.replace(/\[CONVERGENCE:.*?\]/gi, "").trim().split("\n")[0];
     positions.set(msg.agent, firstLine);
@@ -106,6 +115,9 @@ export function summarizeHistory(messages: Message[], keepRecent: number = 4): {
   for (const [agent, position] of positions) {
     const label = agent.charAt(0).toUpperCase() + agent.slice(1);
     summary += `Last position from ${label} (in summarized turns): ${position}\n`;
+  }
+  if (userGuidanceEntries.length > 0) {
+    summary += `\nUser guidance: ${userGuidanceEntries.join("; ")}\n`;
   }
   summary += "\n";
 

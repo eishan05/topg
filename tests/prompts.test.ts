@@ -157,6 +157,51 @@ describe("summarizeHistory", () => {
     expect(summary).toContain("Codex signaled agree");
   });
 
+  it("should not attribute user guidance as an agent position", () => {
+    const messages: Message[] = [
+      makeMsg("claude", 1, "Use React"),
+      makeMsg("codex", 2, "Use Vue"),
+      {
+        role: "initiator",
+        agent: "claude",
+        turn: 3,
+        type: "debate",
+        content: "[USER GUIDANCE]: Use Svelte instead",
+        timestamp: new Date().toISOString(),
+      },
+      makeMsg("codex", 4, "OK Svelte"),
+      makeMsg("claude", 5, "Agreed"),
+      makeMsg("codex", 6, "Done"),
+    ];
+    const { summary } = summarizeHistory(messages, 2);
+    // User guidance should appear as user guidance, not as Claude's position
+    expect(summary).toContain("User guidance");
+    expect(summary).toContain("Use Svelte instead");
+    // Claude's last real position should be "Use React", not the guidance
+    expect(summary).toMatch(/Last position from Claude.*Use React/);
+  });
+
+  it("should not attribute user-prompt messages as agent positions", () => {
+    const messages: Message[] = [
+      makeMsg("claude", 1, "Response A"),
+      makeMsg("codex", 2, "Response B"),
+      {
+        role: "initiator",
+        agent: "claude",
+        turn: 3,
+        type: "user-prompt",
+        content: "[USER PROMPT #2]: New question here",
+        timestamp: new Date().toISOString(),
+      },
+      makeMsg("codex", 4, "Answer"),
+      makeMsg("claude", 5, "Final"),
+      makeMsg("codex", 6, "Done"),
+    ];
+    const { summary } = summarizeHistory(messages, 2);
+    expect(summary).toContain("User said");
+    expect(summary).toMatch(/Last position from Claude.*Response A/);
+  });
+
   it("should include last positions per agent", () => {
     const messages = [
       makeMsg("claude", 1, "Use React for the frontend"),
