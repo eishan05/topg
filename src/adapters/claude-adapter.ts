@@ -12,7 +12,7 @@ export class ClaudeAdapter implements AgentAdapter {
   }
 
   async send(prompt: string, context: ConversationContext, signal?: AbortSignal): Promise<AgentResponse> {
-    const fullPrompt = context.systemPrompt + "\n\n" + prompt;
+    const fullPrompt = prompt;
 
     return new Promise((resolve, reject) => {
       const proc = spawn("claude", ["-p", fullPrompt, "--output-format", "json"], {
