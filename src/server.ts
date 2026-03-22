@@ -1,6 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { WebSocketServer, WebSocket } from "ws";
 import { SessionManager } from "./session.js";
 
 const MIME_TYPES: Record<string, string> = {
@@ -85,8 +86,58 @@ export function createTopgServer(opts: TopgServerOptions) {
     }
   });
 
+  // WebSocket server
+  const wss = new WebSocketServer({ server: httpServer });
+  const clients = new Set<WebSocket>();
+
+  function handleWsMessage(ws: WebSocket, msg: { type: string; [key: string]: unknown }) {
+    switch (msg.type) {
+      case "debate.start":
+      case "debate.steer":
+      case "debate.pause":
+      case "debate.resume":
+        ws.send(JSON.stringify({ type: "error", code: "not_implemented", message: "Coming soon" }));
+        break;
+      default:
+        ws.send(JSON.stringify({ type: "error", code: "invalid_message", message: `Unknown type: ${msg.type}` }));
+        break;
+    }
+  }
+
+  function broadcast(data: unknown) {
+    const payload = JSON.stringify(data);
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    }
+  }
+
+  wss.on("connection", (ws) => {
+    clients.add(ws);
+
+    // Send current sessions list on connect
+    const sessions = sessionManager.listSessions();
+    ws.send(JSON.stringify({ type: "sessions.list", sessions }));
+
+    ws.on("message", (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        handleWsMessage(ws, msg);
+      } catch {
+        ws.send(JSON.stringify({ type: "error", code: "invalid_message", message: "Failed to parse JSON" }));
+      }
+    });
+
+    ws.on("close", () => {
+      clients.delete(ws);
+    });
+  });
+
   return {
     httpServer,
+    wss,
+    broadcast,
     start(): Promise<number> {
       return new Promise((resolve, reject) => {
         httpServer.on("error", reject);
@@ -101,6 +152,7 @@ export function createTopgServer(opts: TopgServerOptions) {
       });
     },
     close() {
+      wss.close();
       httpServer.close();
     },
   };
