@@ -87,9 +87,14 @@ program
 
     // When resuming, restore the session's stored Codex config
     if (opts.resume) {
-      const loaded = session.load(opts.resume as string);
-      if (loaded.meta.config.codex) {
-        codex.updateConfig(loaded.meta.config.codex);
+      try {
+        const loaded = session.load(opts.resume as string);
+        if (loaded.meta.config.codex) {
+          codex.updateConfig(loaded.meta.config.codex);
+        }
+      } catch (err) {
+        console.error(`Failed to load session: ${(err as Error).message}`);
+        process.exit(1);
       }
     }
 
