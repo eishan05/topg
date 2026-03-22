@@ -137,6 +137,7 @@ export async function startRepl(
     state.messages = loaded.messages;
     state.roundStartTurn = Math.max(...loaded.messages.map((m) => m.turn), 0) + 1;
     state.config = { ...config, ...loaded.meta.config };
+    codex.updateConfig(state.config.codex);
     orchestrator = new Orchestrator(claude, codex, session, state.config, onTurnStart);
     session.updateStatus(resumeSessionId, "active");
   } else {
@@ -273,6 +274,7 @@ export async function startRepl(
       state.lastResult = null;
       state.escalationPending = false;
       Object.assign(state.config, loaded.meta.config);
+      codex.updateConfig(state.config.codex);
       orchestrator = new Orchestrator(claude, codex, session, state.config, onTurnStart);
       session.updateStatus(targetId, "active");
       process.stderr.write(`  Switched to session ${chalk.dim(targetId)} (${state.roundIndex} rounds)\n\n`);

@@ -47,6 +47,11 @@ export function formatEscalation(messages: Message[], rounds: number): string {
     output += "\n\n";
   }
 
+  const activities = collectToolActivities(messages);
+  if (activities.length > 0) {
+    output += formatToolActivities(activities);
+  }
+
   return output;
 }
 
