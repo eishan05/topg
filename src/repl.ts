@@ -151,6 +151,15 @@ export async function startRepl(
     state.roundStartTurn = Math.max(...loaded.messages.map((m) => m.turn), 0) + 1;
     state.config = { ...config, ...loaded.meta.config };
     codex.updateConfig(state.config.codex);
+    // If launched with --yolo, re-apply yolo overrides so a saved session
+    // can never downgrade permissions below what yolo guarantees.
+    if (yolo) {
+      codex.updateConfig({
+        sandboxMode: "danger-full-access",
+        approvalPolicy: "never",
+        networkAccessEnabled: true,
+      });
+    }
     orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
     session.updateStatus(resumeSessionId, "active");
   } else {
@@ -285,6 +294,15 @@ export async function startRepl(
       state.escalationPending = false;
       Object.assign(state.config, loaded.meta.config);
       codex.updateConfig(state.config.codex);
+      // If launched with --yolo, re-apply yolo overrides so a saved session
+      // can never downgrade permissions below what yolo guarantees.
+      if (yolo) {
+        codex.updateConfig({
+          sandboxMode: "danger-full-access",
+          approvalPolicy: "never",
+          networkAccessEnabled: true,
+        });
+      }
       orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
       session.updateStatus(targetId, "active");
       process.stderr.write(`  Switched to session ${chalk.dim(targetId)} (${state.roundIndex} rounds)\n\n`);

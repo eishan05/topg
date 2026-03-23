@@ -128,6 +128,15 @@ program
         if (loaded.meta.config.codex) {
           codex.updateConfig(loaded.meta.config.codex);
         }
+        // If launched with --yolo, re-apply yolo overrides so a saved session
+        // can never downgrade permissions below what yolo guarantees.
+        if (yolo) {
+          codex.updateConfig({
+            sandboxMode: "danger-full-access",
+            approvalPolicy: "never",
+            networkAccessEnabled: true,
+          });
+        }
       } catch (err) {
         console.error(`Failed to load session: ${(err as Error).message}`);
         process.exit(1);
