@@ -191,8 +191,12 @@
     var label = $id("typing-label");
     if (indicator) indicator.style.display = "";
     if (label) {
-      var agentLabel = msg.agent === "claude" ? "Claude" : "Codex";
-      label.textContent = agentLabel + " is thinking...";
+      if (msg.role === "synthesis") {
+        label.textContent = "Synthesizing final answer...";
+      } else {
+        var agentLabel = msg.agent === "claude" ? "Claude" : "Codex";
+        label.textContent = agentLabel + " is thinking...";
+      }
     }
   }
 
@@ -473,6 +477,11 @@
   // ── Message Rendering ──────────────────────────────────────────────
 
   function renderMessage(msg) {
+    // Consensus messages get a distinct full-width layout
+    if (msg.type === "consensus") {
+      return renderConsensusMessage(msg);
+    }
+
     var div = document.createElement("div");
     div.className = "message";
 
@@ -544,6 +553,25 @@
 
     div.appendChild(avatar);
     div.appendChild(body);
+    return div;
+  }
+
+  function renderConsensusMessage(msg) {
+    var div = document.createElement("div");
+    div.className = "message consensus";
+
+    // Header
+    var header = document.createElement("div");
+    header.className = "consensus-header";
+    header.textContent = "Final Answer";
+    div.appendChild(header);
+
+    // Content
+    var content = document.createElement("div");
+    content.className = "message-content";
+    content.innerHTML = parseContent(msg.content);
+    div.appendChild(content);
+
     return div;
   }
 

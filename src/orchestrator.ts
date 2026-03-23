@@ -97,11 +97,7 @@ export class Orchestrator {
 
       // Check convergence
       if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
-        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB });
-        const summary = synthesized || formatConsensus(messages, turn);
-        this.session.saveSummary(meta.sessionId, summary);
-        this.session.updateStatus(meta.sessionId, "completed");
-        return { type: "consensus", sessionId: meta.sessionId, rounds: turn, summary, messages };
+        return this.finishConsensus(messages, userPrompt, meta.sessionId, turn);
       }
 
       // Swap roles for next cycle
@@ -184,11 +180,7 @@ export class Orchestrator {
 
       const segmentRounds = turn - segmentStart;
       if (detectConvergence(messages, segmentRounds) || (segmentRounds > 3 && checkDiffStability(messages))) {
-        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB }, signal);
-        const summary = synthesized || formatConsensus(messages, turn);
-        this.session.saveSummary(sessionId, summary);
-        this.session.updateStatus(sessionId, "completed");
-        return { type: "consensus", sessionId, rounds: turn, summary, messages };
+        return this.finishConsensus(messages, userPrompt, sessionId, turn, signal);
       }
 
       [currentReviewer, currentInitiator] = [currentInitiator, currentReviewer];
@@ -243,6 +235,12 @@ export class Orchestrator {
 
     this.session.updateStatus(sessionId, "active");
 
+    // If convergence was already reached before pause (e.g. paused during synthesis),
+    // go straight to synthesis instead of creating another review turn
+    if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
+      return this.finishConsensus(messages, userPrompt, sessionId, turn);
+    }
+
     while (turn < lastTurn + this.config.guardrailRounds) {
       turn++;
 
@@ -264,11 +262,7 @@ export class Orchestrator {
 
       const segmentRounds = turn - lastTurn;
       if (detectConvergence(messages, segmentRounds) || (segmentRounds > 3 && checkDiffStability(messages))) {
-        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB });
-        const summary = synthesized || formatConsensus(messages, turn);
-        this.session.saveSummary(sessionId, summary);
-        this.session.updateStatus(sessionId, "completed");
-        return { type: "consensus", sessionId, rounds: turn, summary, messages };
+        return this.finishConsensus(messages, userPrompt, sessionId, turn);
       }
 
       [currentReviewer, currentInitiator] = [currentInitiator, currentReviewer];
@@ -358,11 +352,7 @@ export class Orchestrator {
 
       const segmentRounds = turn - segmentStart;
       if (detectConvergence(messages, segmentRounds) || (segmentRounds > 3 && checkDiffStability(messages))) {
-        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB }, signal);
-        const summary = synthesized || formatConsensus(messages, turn);
-        this.session.saveSummary(sessionId, summary);
-        this.session.updateStatus(sessionId, "completed");
-        return { type: "consensus", sessionId, rounds: turn, summary, messages };
+        return this.finishConsensus(messages, userPrompt, sessionId, turn, signal);
       }
 
       [currentReviewer, currentInitiator] = [currentInitiator, currentReviewer];
@@ -381,6 +371,34 @@ export class Orchestrator {
     this.session.saveSummary(sessionId, summary);
     this.session.updateStatus(sessionId, "escalated");
     return { type: "escalation", sessionId, rounds: turn, summary, messages };
+  }
+
+  private async finishConsensus(
+    messages: Message[],
+    userPrompt: string,
+    sessionId: string,
+    debateRounds: number,
+    signal?: AbortSignal
+  ): Promise<OrchestratorResult> {
+    const synthTurn = debateRounds + 1;
+    this.onTurnStart?.(synthTurn, this.agentA.name, "synthesis");
+
+    const synthesized = await this.synthesize(
+      messages, userPrompt,
+      { initiator: this.agentA, reviewer: this.agentB },
+      signal
+    );
+    const summary = synthesized || formatConsensus(messages, debateRounds);
+
+    // Add consensus message to the thread so it's visible on the dashboard
+    const consensusMsg = this.toMessage("initiator", this.agentA.name, synthTurn, "consensus", { content: summary });
+    messages.push(consensusMsg);
+    this.session.appendMessage(sessionId, consensusMsg);
+    this.onTurnComplete?.(consensusMsg);
+
+    this.session.saveSummary(sessionId, summary);
+    this.session.updateStatus(sessionId, "completed");
+    return { type: "consensus", sessionId, rounds: debateRounds, summary, messages };
   }
 
   private async synthesize(
