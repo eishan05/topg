@@ -117,4 +117,67 @@ describe("SessionManager", () => {
     const loaded = manager.load(session.sessionId);
     expect(loaded.meta.prompt).toBe("Should we use React?");
   });
+
+  it("should delete an existing session", () => {
+    const session = manager.create("Delete me", defaultConfig);
+    const dir = path.join(tmpDir, session.sessionId);
+    expect(fs.existsSync(dir)).toBe(true);
+    manager.deleteSession(session.sessionId);
+    expect(fs.existsSync(dir)).toBe(false);
+  });
+
+  it("should throw when deleting a nonexistent session", () => {
+    expect(() => manager.deleteSession("nonexistent")).toThrow("Session not found: nonexistent");
+  });
+
+  it("should filter sessions by status", () => {
+    const s1 = manager.create("First", defaultConfig);
+    const s2 = manager.create("Second", defaultConfig);
+    manager.updateStatus(s1.sessionId, "completed");
+    manager.updateStatus(s2.sessionId, "escalated");
+
+    const completed = manager.filterSessions({ statuses: ["completed"] });
+    expect(completed).toHaveLength(1);
+    expect(completed[0].sessionId).toBe(s1.sessionId);
+
+    const both = manager.filterSessions({ statuses: ["completed", "escalated"] });
+    expect(both).toHaveLength(2);
+  });
+
+  it("should filter sessions by age", () => {
+    const s1 = manager.create("Old session", defaultConfig);
+    manager.create("New session", defaultConfig);
+
+    // Manually backdate s1's updatedAt
+    const metaPath = path.join(tmpDir, s1.sessionId, "meta.json");
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+    meta.updatedAt = new Date(Date.now() - 10 * 86400000).toISOString(); // 10 days ago
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
+    const cutoff = new Date(Date.now() - 7 * 86400000); // 7 days ago
+    const old = manager.filterSessions({ olderThan: cutoff });
+    expect(old).toHaveLength(1);
+    expect(old[0].prompt).toBe("Old session");
+  });
+
+  it("should filter sessions by status and age combined", () => {
+    const s1 = manager.create("Old completed", defaultConfig);
+    const s2 = manager.create("New completed", defaultConfig);
+    const s3 = manager.create("Old active", defaultConfig);
+    manager.updateStatus(s1.sessionId, "completed");
+    manager.updateStatus(s2.sessionId, "completed");
+
+    // Backdate s1 and s3
+    for (const s of [s1, s3]) {
+      const metaPath = path.join(tmpDir, s.sessionId, "meta.json");
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+      meta.updatedAt = new Date(Date.now() - 10 * 86400000).toISOString();
+      fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+    }
+
+    const cutoff = new Date(Date.now() - 7 * 86400000);
+    const result = manager.filterSessions({ statuses: ["completed"], olderThan: cutoff });
+    expect(result).toHaveLength(1);
+    expect(result[0].prompt).toBe("Old completed");
+  });
 });
