@@ -7,6 +7,7 @@ import { ClaudeAdapter } from "./adapters/claude-adapter.js";
 import { CodexAdapter } from "./adapters/codex-adapter.js";
 import { SessionManager } from "./session.js";
 import { startRepl } from "./repl.js";
+import { createTopgServer } from "./server.js";
 import type { AgentName, OrchestratorConfig } from "./types.js";
 
 function askUser(question: string): Promise<string> {
@@ -24,7 +25,35 @@ const program = new Command();
 program
   .name("topg")
   .description("Inter-agent collaboration between Claude Code and OpenAI Codex")
-  .version("0.1.0")
+  .version("0.1.0");
+
+program
+  .command("serve")
+  .description("Start the web dashboard")
+  .option("--port <number>", "Port to listen on", "4747")
+  .action(async (opts) => {
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("Error: OPENAI_API_KEY is required for Codex.");
+      console.error("Set it via: export OPENAI_API_KEY=your-key");
+      process.exit(1);
+    }
+
+    const port = parseInt(opts.port, 10);
+    const session = new SessionManager();
+    const server = createTopgServer({ port, sessionManager: session });
+
+    const actualPort = await server.start();
+    console.error(`topg dashboard running at http://localhost:${actualPort}`);
+    console.error("Press Ctrl+C to stop.\n");
+
+    process.on("SIGINT", () => {
+      console.error("\nShutting down...");
+      server.close();
+      process.exit(0);
+    });
+  });
+
+program
   .argument("[prompt]", "The prompt or question to collaborate on")
   .option("--start-with <agent>", "Which agent goes first (claude or codex)", "claude")
   .option("--cwd <path>", "Working directory for agents", process.cwd())
