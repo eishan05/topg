@@ -13,6 +13,10 @@
     currentMeta: null,     // SessionMeta
     ws: null,              // WebSocket
     reconnectDelay: 1000,
+    // Per-agent streaming state to support concurrent turns (e.g. escalation).
+    // Keyed by agent name ("claude" | "codex"), each entry holds its own content,
+    // DOM element, turn/role metadata, and rAF handle.
+    streams: {},           // { [agent]: { content, el, turn, role, raf } }
   };
 
   // ── DOM refs ───────────────────────────────────────────────────────
@@ -131,6 +135,9 @@
       case "turn.start":
         handleTurnStart(msg);
         break;
+      case "turn.chunk":
+        handleTurnChunk(msg);
+        break;
       case "turn.complete":
         handleTurnComplete(msg);
         break;
@@ -187,6 +194,16 @@
   function handleTurnStart(msg) {
     if (msg.sessionId !== state.currentSessionId) return;
 
+    // Initialise per-agent streaming state for this turn.
+    // During escalation both agents stream concurrently, so each gets its own slot.
+    state.streams[msg.agent] = {
+      content: "",
+      el: null,
+      turn: msg.turn,
+      role: msg.role,
+      raf: null,
+    };
+
     var indicator = $id("typing-indicator");
     var label = $id("typing-label");
     if (indicator) indicator.style.display = "";
@@ -194,6 +211,60 @@
       var agentLabel = msg.agent === "claude" ? "Claude" : "Codex";
       label.textContent = agentLabel + " is thinking...";
     }
+  }
+
+  function handleTurnChunk(msg) {
+    if (msg.sessionId !== state.currentSessionId) return;
+
+    var s = state.streams[msg.agent];
+    if (!s) return; // no turn.start received yet — ignore stale chunk
+
+    s.content += msg.content;
+
+    // Hide the typing indicator once content starts arriving
+    var indicator = $id("typing-indicator");
+    if (indicator) indicator.style.display = "none";
+
+    // Throttle DOM updates with requestAnimationFrame to prevent layout thrashing
+    // when chunks arrive faster than the browser can paint.
+    if (!s.raf) {
+      var agent = msg.agent;
+      s.raf = requestAnimationFrame(function () {
+        var stream = state.streams[agent];
+        if (stream) stream.raf = null;
+        flushStreamingDOM(agent);
+      });
+    }
+  }
+
+  function flushStreamingDOM(agent) {
+    var s = state.streams[agent];
+    if (!s) return;
+
+    var thread = $id("thread");
+    if (!thread) return;
+
+    // Create the streaming message element on first flush
+    if (!s.el) {
+      s.el = renderMessage({
+        agent: agent,
+        role: s.role || "initiator",
+        turn: s.turn || 0,
+        content: s.content,
+      });
+      s.el.classList.add("streaming");
+      thread.appendChild(s.el);
+    } else {
+      // Update the content area of the existing streaming element.
+      // Safe to use innerHTML: parseContent() calls escapeHtml() before any
+      // HTML construction, so model output cannot inject scripts or tags.
+      var contentEl = s.el.querySelector(".message-content");
+      if (contentEl) {
+        contentEl.innerHTML = parseContent(s.content);
+      }
+    }
+
+    thread.scrollTop = thread.scrollHeight;
   }
 
   function handleTurnComplete(msg) {
@@ -208,10 +279,26 @@
     if (message) {
       state.currentMessages.push(message);
       var thread = $id("thread");
+      var agentKey = message.agent;
+      var s = state.streams[agentKey];
+
       if (thread) {
-        thread.appendChild(renderMessage(message));
+        // Replace the streaming placeholder with the final message
+        if (s && s.el && s.el.parentNode === thread) {
+          var finalEl = renderMessage(message);
+          thread.replaceChild(finalEl, s.el);
+        } else {
+          thread.appendChild(renderMessage(message));
+        }
         thread.scrollTop = thread.scrollHeight;
       }
+
+      // Clean up this agent's streaming state
+      if (s) {
+        if (s.raf) cancelAnimationFrame(s.raf);
+        delete state.streams[agentKey];
+      }
+
       updateConvergenceBar();
     }
   }
@@ -330,7 +417,18 @@
 
   // ── Select Session ─────────────────────────────────────────────────
 
+  function clearStreamingState() {
+    var agents = Object.keys(state.streams);
+    for (var i = 0; i < agents.length; i++) {
+      var s = state.streams[agents[i]];
+      if (s && s.raf) cancelAnimationFrame(s.raf);
+    }
+    state.streams = {};
+  }
+
   function selectSession(sessionId) {
+    // Clear any in-progress streaming state from the previous session
+    clearStreamingState();
     state.currentSessionId = sessionId;
 
     fetch("/api/sessions/" + encodeURIComponent(sessionId))

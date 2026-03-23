@@ -86,6 +86,9 @@ export interface AgentResponse {
   convergenceSignal?: ConvergenceSignal;
 }
 
+/** Callback invoked with incremental text chunks during streaming. */
+export type StreamChunkCallback = (chunk: string) => void;
+
 export interface ConversationContext {
   sessionId: string;
   history: Message[];

@@ -162,6 +162,14 @@ export function createTopgServer(opts: TopgServerOptions) {
             message,
           });
         },
+        onChunk: (agent, content) => {
+          broadcast({
+            type: "turn.chunk",
+            sessionId,
+            agent,
+            content,
+          });
+        },
       },
     );
     return orchestrator;

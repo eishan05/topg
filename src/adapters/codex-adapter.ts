@@ -6,6 +6,7 @@ import type {
   AgentResponse,
   CodexConfig,
   ConversationContext,
+  StreamChunkCallback,
   ToolActivity,
 } from "../types.js";
 import type { AgentAdapter } from "./agent-adapter.js";
@@ -51,7 +52,7 @@ export class CodexAdapter implements AgentAdapter {
     Object.assign(this.codexConfig, partial);
   }
 
-  async send(prompt: string, context: ConversationContext, signal?: AbortSignal): Promise<AgentResponse> {
+  async send(prompt: string, context: ConversationContext, signal?: AbortSignal, onChunk?: StreamChunkCallback): Promise<AgentResponse> {
     const fullPrompt = prompt;
 
     const threadOpts: ThreadOptions = {
@@ -87,6 +88,10 @@ export class CodexAdapter implements AgentAdapter {
     ]);
 
     const content = result.finalResponse ?? String(result);
+    // Codex SDK doesn't expose streaming — emit the entire response as a single
+    // chunk. On the dashboard this means Codex turns jump from "thinking..." to
+    // the full message without incremental updates (unlike Claude's token stream).
+    onChunk?.(content);
     const convergenceSignal = parseConvergenceTag(content);
     const toolActivities = extractToolActivities(result.items);
 

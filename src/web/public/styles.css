@@ -556,6 +556,21 @@ html, body {
   text-decoration: underline;
 }
 
+/* ---------- Streaming Indicator ---------- */
+
+.message.streaming .message-content::after {
+  content: '\25AE';
+  display: inline;
+  color: var(--text-muted);
+  animation: blink-cursor 1s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* ---------- Code Blocks ---------- */
 
 .message-content pre {

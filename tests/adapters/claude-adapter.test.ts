@@ -39,17 +39,35 @@ describe("ClaudeAdapter", () => {
   });
 
   it("should send a prompt and parse the response", async () => {
-    const responseJson = JSON.stringify({
-      type: "result",
-      result: "Here is my review.\n[CONVERGENCE: agree]",
-    });
-    vi.mocked(spawn).mockReturnValue(mockProcess(responseJson));
+    // The live CLI emits "assistant" events with cumulative message content,
+    // then a "result" event with the final text.
+    const lines = [
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Here is my review.\n[CONVERGENCE: agree]" }] } }),
+      JSON.stringify({ type: "result", subtype: "success", result: "Here is my review.\n[CONVERGENCE: agree]" }),
+    ].join("\n") + "\n";
+    vi.mocked(spawn).mockReturnValue(mockProcess(lines));
 
     const adapter = new ClaudeAdapter();
     const result = await adapter.send("Review this code", ctx);
 
     expect(result.content).toContain("Here is my review");
     expect(result.convergenceSignal).toBe("agree");
+  });
+
+  it("should emit streaming chunks from assistant events", async () => {
+    // Simulate multiple cumulative assistant events (text grows incrementally)
+    const lines = [
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Hello" }] } }),
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Hello world" }] } }),
+      JSON.stringify({ type: "result", subtype: "success", result: "Hello world" }),
+    ].join("\n") + "\n";
+    vi.mocked(spawn).mockReturnValue(mockProcess(lines));
+
+    const chunks: string[] = [];
+    const adapter = new ClaudeAdapter();
+    await adapter.send("test", ctx, undefined, (chunk) => chunks.push(chunk));
+
+    expect(chunks).toEqual(["Hello", " world"]);
   });
 
   it("should have name 'claude'", () => {
