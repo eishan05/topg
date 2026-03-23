@@ -300,6 +300,37 @@ describe("synthesis step", () => {
   });
 });
 
+describe("synthesis abort handling", () => {
+  it("should re-throw abort errors during synthesis instead of swallowing them", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-synth-abort-"));
+    const session = new SessionManager(tmpDir);
+
+    let claudeCallCount = 0;
+    const claude: AgentAdapter = {
+      name: "claude",
+      send: vi.fn(async () => {
+        claudeCallCount++;
+        if (claudeCallCount === 1) {
+          return { content: "Use React.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const };
+        }
+        // Synthesis call aborted
+        throw new Error("aborted");
+      }),
+    };
+
+    const codex = createMockAdapter("codex", [
+      { content: "Agreed.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const },
+    ]);
+
+    const orch = new Orchestrator(claude, codex, session, defaultConfig);
+
+    // The abort should propagate, not be swallowed
+    await expect(orch.run("What framework?")).rejects.toThrow("aborted");
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
 describe("runWithHistory", () => {
   it("should start with existing messages and reach consensus", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-hist-"));

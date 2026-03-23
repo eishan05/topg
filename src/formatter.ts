@@ -61,26 +61,32 @@ export function formatEscalation(messages: Message[], rounds: number): string {
 
 /**
  * Find the best message to use as the consensus output.
- * Prefers the last initiator message over the last reviewer message,
- * since reviewers tend to produce meta-commentary ("Your plan is solid...")
- * rather than the actual deliverable.
+ *
+ * In the orchestrator, only turn 1 carries role:"initiator" — all subsequent
+ * turns (rebuttals included) are tagged role:"reviewer".  So we cannot rely
+ * on the role field to locate the revised deliverable.
+ *
+ * Instead we use agent identity: the agent that opened the debate (agentA)
+ * typically carries the substantive answer, while the other agent's final
+ * message is often meta-commentary ("Your plan is solid…").  We prefer the
+ * last message from the *same agent* that wrote the first (turn-1) message,
+ * falling back to the absolute last message if we cannot determine it.
  */
 function findBestConsensusMessage(agentMessages: Message[]): Message | null {
   if (agentMessages.length === 0) return null;
 
-  // If the last message is from the initiator, use it directly
-  const last = agentMessages[agentMessages.length - 1];
-  if (last.role === "initiator") return last;
+  // Identify the initiating agent (first message's agent)
+  const initiatingAgent = agentMessages[0].agent;
 
-  // Otherwise, find the last initiator message
+  // Walk backwards to find the last message from the initiating agent
   for (let i = agentMessages.length - 1; i >= 0; i--) {
-    if (agentMessages[i].role === "initiator") {
+    if (agentMessages[i].agent === initiatingAgent) {
       return agentMessages[i];
     }
   }
 
-  // Fallback to the last message if no initiator found
-  return last;
+  // Fallback to the last message
+  return agentMessages[agentMessages.length - 1];
 }
 
 function getLastMessagePerAgent(messages: Message[]): Message[] {

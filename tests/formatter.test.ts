@@ -175,7 +175,9 @@ describe("formatConsensus prefers initiator message", () => {
     expect(agreedSection).not.toContain("Your plan is solid");
   });
 
-  it("should use last message when it is from the initiator", () => {
+  it("should use the initiating agent's latest message in multi-round debates", () => {
+    // Simulates the real orchestrator: only turn 1 has role:"initiator",
+    // all subsequent turns have role:"reviewer" regardless of agent.
     const messages: Message[] = [
       {
         role: "initiator",
@@ -190,23 +192,37 @@ describe("formatConsensus prefers initiator message", () => {
         agent: "codex",
         turn: 2,
         type: "review",
-        content: "Use React with Next.js.\n[CONVERGENCE: partial]",
+        content: "React is fine but add Next.js.\n[CONVERGENCE: partial]",
         convergenceSignal: "partial",
         timestamp: new Date().toISOString(),
       },
       {
-        role: "initiator",
+        role: "reviewer",
         agent: "claude",
         turn: 3,
-        type: "code",
+        type: "review",
         content: "Agreed. Use React with Next.js for SSR.\n[CONVERGENCE: agree]",
+        convergenceSignal: "agree",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        role: "reviewer",
+        agent: "codex",
+        turn: 4,
+        type: "review",
+        content: "Your revised plan is solid. I verified all claims.\n[CONVERGENCE: agree]",
         convergenceSignal: "agree",
         timestamp: new Date().toISOString(),
       },
     ];
 
-    const output = formatConsensus(messages, 3);
-    expect(output).toContain("React with Next.js for SSR");
+    const output = formatConsensus(messages, 4);
+    const agreedSection = output.split("## Key Decisions")[0];
+    // Should use claude's turn-3 revision (last message from the initiating agent),
+    // NOT codex's turn-4 meta-review, and NOT claude's stale turn-1 answer
+    expect(agreedSection).toContain("React with Next.js for SSR");
+    expect(agreedSection).not.toContain("Your revised plan is solid");
+    expect(agreedSection).not.toMatch(/^.*## Agreed Approach\n\nUse React\.\n/);
   });
 });
 

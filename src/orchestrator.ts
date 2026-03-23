@@ -403,7 +403,12 @@ export class Orchestrator {
       }, signal);
 
       return response.content?.trim() || null;
-    } catch {
+    } catch (err: unknown) {
+      // Re-throw abort errors so cancellation propagates correctly
+      // (mirrors the abort handling in runEscalation)
+      if (err instanceof Error && err.message === "aborted") {
+        throw err;
+      }
       return null; // Fallback to formatConsensus behavior
     }
   }
