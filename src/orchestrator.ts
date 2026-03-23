@@ -4,6 +4,7 @@ import { detectConvergence, checkDiffStability } from "./convergence.js";
 import { initiatorPrompt, reviewerPrompt, rebuttalPrompt, escalationPrompt, userGuidancePrompt, formatTurnPrompt, synthesisPrompt } from "./prompts.js";
 import { formatConsensus, formatEscalation } from "./formatter.js";
 import { SessionManager } from "./session.js";
+import { capitalize } from "./utils.js";
 
 export type TurnCallback = (turn: number, agent: AgentName, role: string) => void;
 export type TurnCompleteCallback = (message: Message) => void;
@@ -11,10 +12,6 @@ export type TurnCompleteCallback = (message: Message) => void;
 export interface OrchestratorCallbacks {
   onTurnStart?: TurnCallback;
   onTurnComplete?: TurnCompleteCallback;
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export class Orchestrator {
@@ -405,7 +402,7 @@ export class Orchestrator {
         systemPrompt: synthesisPrompt(),
       }, signal);
 
-      return response.content;
+      return response.content?.trim() || null;
     } catch {
       return null; // Fallback to formatConsensus behavior
     }

@@ -1,4 +1,5 @@
 import type { Message, Artifact, ToolActivity } from "./types.js";
+import { capitalize } from "./utils.js";
 
 export function formatConsensus(messages: Message[], rounds: number): string {
   const lastMessages = getLastMessagePerAgent(messages);
@@ -103,10 +104,6 @@ function collectArtifacts(messages: Message[]): Artifact[] {
     }
   }
   return artifacts;
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function firstSentence(s: string): string {

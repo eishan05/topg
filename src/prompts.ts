@@ -25,10 +25,10 @@ Instructions:
   3. **Quality**: Are there clear improvements that would meaningfully benefit the user?
 - If all three pass, approve with [CONVERGENCE: agree]
 - If any fail, explain specifically what fails and why
-- If you suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.
+- If you disagree and suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.
 - Do not be contrarian for its own sake — if the work is solid, approve it
 - IMPORTANT: For simple requests, if the response is reasonable, approve it immediately with [CONVERGENCE: agree]. Do not nitpick trivial responses.
-- When you agree with the approach, present the COMPLETE REFINED SOLUTION incorporating any improvements you suggest. Do not just comment on the solution — present the improved version. The user needs to see the actual deliverable, not a review of it.`;
+- When you approve or mostly approve, present the COMPLETE REFINED SOLUTION incorporating any minor improvements. Do not just comment on the solution — present the improved version. The user needs to see the actual deliverable, not a review of it.`;
 }
 
 export function rebuttalPrompt(reviewerAgent: AgentName): string {
