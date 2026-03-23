@@ -1,6 +1,6 @@
 export type AgentName = "claude" | "codex";
 export type Role = "initiator" | "reviewer";
-export type MessageType = "code" | "review" | "debate" | "consensus" | "deadlock" | "user-prompt";
+export type MessageType = "code" | "review" | "debate" | "consensus" | "deadlock" | "user-prompt" | "user-guidance";
 export type ConvergenceSignal = "agree" | "disagree" | "partial" | "defer";
 export type ArtifactType = "code" | "diff" | "config";
 

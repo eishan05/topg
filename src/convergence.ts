@@ -60,7 +60,7 @@ function getSignalForMessage(msg: Message): ConvergenceSignal | null {
 }
 
 export function detectConvergence(messages: Message[]): boolean {
-  const agentMessages = messages.filter((m) => m.type !== "user-prompt");
+  const agentMessages = messages.filter((m) => m.type !== "user-prompt" && m.type !== "user-guidance");
   if (agentMessages.length < 2) return false;
   const lastByAgent = new Map<string, Message>();
   for (const msg of agentMessages) {
@@ -85,7 +85,7 @@ export function detectConvergence(messages: Message[]): boolean {
 }
 
 export function checkDiffStability(messages: Message[]): boolean {
-  const agentMessages = messages.filter((m) => m.type !== "user-prompt");
+  const agentMessages = messages.filter((m) => m.type !== "user-prompt" && m.type !== "user-guidance");
   if (agentMessages.length < 4) return false;
   const recent = agentMessages.slice(-4);
   const contents = recent.map((m) =>

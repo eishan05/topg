@@ -177,7 +177,7 @@ describe("summarizeHistory", () => {
         role: "initiator",
         agent: "claude",
         turn: 3,
-        type: "user-prompt",
+        type: "user-guidance",
         content: "[USER GUIDANCE]: Use Svelte instead",
         timestamp: new Date().toISOString(),
       },

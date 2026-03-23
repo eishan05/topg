@@ -278,7 +278,7 @@ export class Orchestrator {
       role: "initiator",
       agent: "claude",
       turn,
-      type: "user-prompt",
+      type: "user-guidance",
       content: `[USER GUIDANCE]: ${userGuidance}`,
       timestamp: new Date().toISOString(),
     };

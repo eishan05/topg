@@ -98,8 +98,8 @@ export function summarizeHistory(messages: Message[], keepRecent: number = 4): {
   for (const msg of older) {
     // Filter out user messages (prompts and guidance) — these must not be
     // attributed as agent positions. The type check is authoritative; the
-    // content check is a defensive fallback for legacy session data.
-    if (msg.type === "user-prompt" || msg.content.startsWith("[USER GUIDANCE]:") || msg.content.startsWith("[USER PROMPT")) {
+    // content checks are defensive fallbacks for legacy session data.
+    if (msg.type === "user-prompt" || msg.type === "user-guidance" || msg.content.startsWith("[USER GUIDANCE]:") || msg.content.startsWith("[USER PROMPT")) {
       const guidance = msg.content.replace(/^\[USER[^\]]*\]:\s*/i, "").trim();
       userGuidanceEntries.push(`Turn ${msg.turn}: User said: ${guidance.split("\n")[0]}`);
       continue;
