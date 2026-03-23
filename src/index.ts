@@ -1,24 +1,14 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { createInterface } from "node:readline";
 import { Orchestrator } from "./orchestrator.js";
 import { ClaudeAdapter } from "./adapters/claude-adapter.js";
 import { CodexAdapter } from "./adapters/codex-adapter.js";
 import { SessionManager } from "./session.js";
 import { startRepl } from "./repl.js";
 import { createTopgServer } from "./server.js";
-import type { AgentName, CodexConfig, OrchestratorConfig } from "./types.js";
-
-function askUser(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
+import { askUser, parseDuration } from "./utils.js";
+import type { AgentName, CodexConfig, OrchestratorConfig, SessionMeta } from "./types.js";
 
 const program = new Command();
 
@@ -51,6 +41,111 @@ program
       server.close();
       process.exit(0);
     });
+  });
+
+program
+  .command("delete <sessionId>")
+  .description("Delete a single session")
+  .action(async (sessionId: string) => {
+    const session = new SessionManager();
+    try {
+      const data = session.load(sessionId);
+      const snippet = data.meta.prompt.length > 50
+        ? data.meta.prompt.slice(0, 50) + "..."
+        : data.meta.prompt;
+      session.deleteSession(sessionId);
+      console.error(`Deleted session ${sessionId} ("${snippet}")`);
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("clear")
+  .description("Bulk-delete sessions by status or age")
+  .option("--all", "Delete all sessions")
+  .option("--completed", "Delete completed sessions")
+  .option("--escalated", "Delete escalated sessions")
+  .option("--older-than <duration>", "Delete sessions not updated within duration (e.g., 7d, 2w, 1m)")
+  .option("--force", "Skip confirmation prompt")
+  .action(async (opts) => {
+    // Validate: at least one filter required
+    if (!opts.all && !opts.completed && !opts.escalated && !opts.olderThan) {
+      console.error("Error: At least one filter is required (--all, --completed, --escalated, --older-than).");
+      console.error("\nExamples:");
+      console.error("  topg clear --all                        Delete all sessions");
+      console.error("  topg clear --completed                  Delete completed sessions");
+      console.error("  topg clear --completed --older-than 7d  Delete completed sessions older than 7 days");
+      process.exit(1);
+    }
+
+    // Validate: --all cannot combine with other filters
+    if (opts.all && (opts.completed || opts.escalated || opts.olderThan)) {
+      console.error("Error: --all cannot be combined with --completed, --escalated, or --older-than.");
+      process.exit(1);
+    }
+
+    const session = new SessionManager();
+
+    let sessions: SessionMeta[];
+    if (opts.all) {
+      sessions = session.listSessions();
+    } else {
+      const statuses: SessionMeta["status"][] = [];
+      if (opts.completed) statuses.push("completed");
+      if (opts.escalated) statuses.push("escalated");
+
+      let olderThan: Date | undefined;
+      if (opts.olderThan) {
+        const ms = parseDuration(opts.olderThan);
+        olderThan = new Date(Date.now() - ms);
+      }
+
+      sessions = session.filterSessions({
+        statuses: statuses.length > 0 ? statuses : undefined,
+        olderThan,
+      });
+    }
+
+    if (sessions.length === 0) {
+      console.error("No sessions match the given filters.");
+      return;
+    }
+
+    // Warn when active/paused sessions would be deleted without an explicit status filter
+    if (!opts.all && !opts.completed && !opts.escalated) {
+      const resumable = sessions.filter((s) => s.status === "active" || s.status === "paused");
+      if (resumable.length > 0) {
+        console.error(`Warning: ${resumable.length} active/paused session${resumable.length === 1 ? "" : "s"} will be deleted.`);
+        console.error("Use --completed or --escalated to target only finished sessions.");
+      }
+    }
+
+    // Show confirmation unless --force
+    if (!opts.force) {
+      const statusCounts = new Map<string, number>();
+      for (const s of sessions) {
+        statusCounts.set(s.status, (statusCounts.get(s.status) ?? 0) + 1);
+      }
+      const breakdown = Array.from(statusCounts.entries())
+        .map(([status, count]) => `${count} ${status}`)
+        .join(", ");
+
+      console.error(`About to delete ${sessions.length} session${sessions.length === 1 ? "" : "s"}:`);
+      console.error(`  ${breakdown}`);
+      const answer = await askUser("Continue? (y/N) ");
+      if (answer.toLowerCase() !== "y") {
+        console.error("Aborted.");
+        return;
+      }
+    }
+
+    // Delete all matched sessions
+    for (const s of sessions) {
+      session.deleteSession(s.sessionId);
+    }
+    console.error(`Deleted ${sessions.length} session${sessions.length === 1 ? "" : "s"}.`);
   });
 
 program

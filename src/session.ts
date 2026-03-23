@@ -20,7 +20,12 @@ export class SessionManager {
   }
 
   private sessionDir(sessionId: string): string {
-    return path.join(this.baseDir, sessionId);
+    const dir = path.join(this.baseDir, sessionId);
+    const resolved = path.resolve(dir);
+    if (!resolved.startsWith(path.resolve(this.baseDir) + path.sep)) {
+      throw new Error(`Invalid session ID: ${sessionId}`);
+    }
+    return resolved;
   }
 
   create(prompt: string, config: OrchestratorConfig): SessionMeta {
@@ -106,6 +111,22 @@ export class SessionManager {
       }
     }
     return sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
+  deleteSession(sessionId: string): void {
+    const dir = this.sessionDir(sessionId);
+    if (!fs.existsSync(dir)) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  filterSessions(opts: { statuses?: SessionMeta["status"][]; olderThan?: Date }): SessionMeta[] {
+    return this.listSessions().filter((s) => {
+      if (opts.statuses && !opts.statuses.includes(s.status)) return false;
+      if (opts.olderThan && new Date(s.updatedAt) >= opts.olderThan) return false;
+      return true;
+    });
   }
 
   updatePrompt(sessionId: string, prompt: string): void {
