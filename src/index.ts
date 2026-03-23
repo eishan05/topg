@@ -163,6 +163,8 @@ program
   .option("--no-codex-network", "Disable network access for Codex")
   .option("--codex-model <model>", "Override model for Codex agent")
   .option("--codex-reasoning <effort>", "Codex reasoning effort (minimal, low, medium, high, xhigh)")
+  .option("--dashboard", "Start the web dashboard alongside the REPL (default: true)", true)
+  .option("--no-dashboard", "Disable the auto-started web dashboard")
   .option("--yolo", "Skip all permission checks: Claude gets --dangerously-skip-permissions, Codex gets full sandbox access")
   .action(async (prompt: string | undefined, opts) => {
     // Validate credentials
@@ -196,15 +198,17 @@ program
       yolo,
     };
 
+    const replOptions = { dashboard: opts.dashboard as boolean };
+
     // Case 1: No prompt and no --resume → launch REPL
     if (!prompt && !opts.resume) {
-      await startRepl(config);
+      await startRepl(config, undefined, replOptions);
       return;
     }
 
     // Case 2: --resume with no prompt → launch REPL with loaded session
     if (opts.resume && !prompt) {
-      await startRepl(config, opts.resume as string);
+      await startRepl(config, opts.resume as string, replOptions);
       return;
     }
 

@@ -3,8 +3,10 @@ import chalk from "chalk";
 import { ClaudeAdapter } from "./adapters/claude-adapter.js";
 import { CodexAdapter } from "./adapters/codex-adapter.js";
 import { Orchestrator } from "./orchestrator.js";
+import type { OrchestratorCallbacks } from "./orchestrator.js";
 import { SessionManager } from "./session.js";
-import type { CodexConfig, Message, OrchestratorConfig, OrchestratorResult } from "./types.js";
+import { createTopgServer } from "./server.js";
+import type { AgentName, CodexConfig, Message, OrchestratorConfig, OrchestratorResult } from "./types.js";
 
 // --- Command parsing ---
 
@@ -104,9 +106,14 @@ interface ReplState {
 
 // --- REPL ---
 
+export interface ReplOptions {
+  dashboard?: boolean;
+}
+
 export async function startRepl(
   config: OrchestratorConfig,
-  resumeSessionId?: string
+  resumeSessionId?: string,
+  options?: ReplOptions
 ): Promise<void> {
   const session = new SessionManager();
   const yolo = !!config.yolo;
@@ -115,9 +122,33 @@ export async function startRepl(
 
   const spinner = createSpinner((text) => process.stderr.write(text));
 
+  // Start the web dashboard server in the background (unless --no-dashboard)
+  const enableDashboard = options?.dashboard !== false;
+  let server: ReturnType<typeof createTopgServer> | null = null;
+  let dashboardUrl: string | null = null;
+
+  if (enableDashboard) {
+    server = createTopgServer({ port: 0, sessionManager: session });
+    try {
+      const dashboardPort = await server.start();
+      dashboardUrl = `http://localhost:${dashboardPort}`;
+    } catch {
+      process.stderr.write(chalk.dim("Dashboard unavailable (port binding failed)\n"));
+      server = null;
+    }
+  }
+
+  let serverClosed = false;
+  function closeServer() {
+    if (server && !serverClosed) {
+      serverClosed = true;
+      server.close();
+    }
+  }
+
   let abortController: AbortController | null = null;
 
-  // State must be declared before onTurnStart so it can reference state
+  // State must be declared before callbacks so they can reference state
   const state: ReplState = {
     sessionId: "",
     messages: [],
@@ -129,19 +160,27 @@ export async function startRepl(
     escalationPending: false,
   };
 
-  const onTurnStart = (turn: number, agent: string, role: string) => {
-    const label = agent === "claude"
-      ? chalk.magenta("Claude")
-      : chalk.green("Codex");
-    const relativeTurn = turn - state.roundStartTurn + 1;
-    if (role === "escalation") {
-      spinner.update(`${label} (${role}) responding...`, state.config.guardrailRounds + 1, state.config.guardrailRounds);
-    } else {
-      spinner.start(`${label} (${role}) responding...`, relativeTurn, state.config.guardrailRounds);
-    }
+  let dashboardHintShown = false;
+
+  const callbacks: OrchestratorCallbacks = {
+    onTurnStart: (turn, agent, role) => {
+      const label = agent === "claude"
+        ? chalk.magenta("Claude")
+        : chalk.green("Codex");
+      const relativeTurn = turn - state.roundStartTurn + 1;
+      if (role === "escalation") {
+        spinner.update(`${label} (${role}) responding...`, state.config.guardrailRounds + 1, state.config.guardrailRounds);
+      } else {
+        spinner.start(`${label} (${role}) responding...`, relativeTurn, state.config.guardrailRounds);
+      }
+      server?.broadcast({ type: "turn.start", sessionId: state.sessionId, turn, agent, role });
+    },
+    onTurnComplete: (message) => {
+      server?.broadcast({ type: "turn.complete", sessionId: state.sessionId, message });
+    },
   };
 
-  let orchestrator = new Orchestrator(claude, codex, session, config, { onTurnStart });
+  let orchestrator = new Orchestrator(claude, codex, session, config, callbacks);
 
   // Load or create session
   if (resumeSessionId) {
@@ -160,11 +199,12 @@ export async function startRepl(
         networkAccessEnabled: true,
       });
     }
-    orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
+    orchestrator = new Orchestrator(claude, codex, session, state.config, callbacks);
     session.updateStatus(resumeSessionId, "active");
   } else {
     const meta = session.create("(interactive session)", config);
     state.sessionId = meta.sessionId;
+    server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
   }
 
   // Welcome banner
@@ -182,6 +222,9 @@ export async function startRepl(
   if (capabilities.length > 0) {
     process.stderr.write(`Codex: ${chalk.dim(capabilities.join(", "))}\n`);
   }
+  if (dashboardUrl) {
+    process.stderr.write(`Dashboard: ${chalk.cyan(dashboardUrl)}\n`);
+  }
   process.stderr.write(`Type a prompt to start a debate, or ${chalk.dim("/help")} for commands.\n\n`);
 
   // Readline
@@ -196,6 +239,7 @@ export async function startRepl(
 
   commands.set("quit", () => {
     session.updateStatus(state.sessionId, "paused");
+    closeServer();
     process.stderr.write(`\nSession paused. Resume with: ${chalk.dim(`topg --resume ${state.sessionId}`)}\n`);
     rl.close();
     process.exit(0);
@@ -211,6 +255,7 @@ export async function startRepl(
       "  /resume <id>       Switch to a different session",
       "  /steer <text>      Provide guidance after escalation",
       "  /status            Show current session info",
+      "  /dashboard         Open the live dashboard",
       "  /config [key] [val] View or change settings",
       "  /help              Show this help",
       "",
@@ -303,8 +348,9 @@ export async function startRepl(
           networkAccessEnabled: true,
         });
       }
-      orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
+      orchestrator = new Orchestrator(claude, codex, session, state.config, callbacks);
       session.updateStatus(targetId, "active");
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
       process.stderr.write(`  Switched to session ${chalk.dim(targetId)} (${state.roundIndex} rounds)\n\n`);
     } catch {
       process.stderr.write(chalk.red(`  Session not found: ${targetId}\n\n`));
@@ -337,6 +383,8 @@ export async function startRepl(
       state.lastResult = result;
       state.messages = result.messages;
       state.roundStartTurn = Math.max(...state.messages.map((m) => m.turn), 0) + 1;
+      server?.broadcast({ type: "debate.result", sessionId: state.sessionId, result });
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
 
       if (result.type === "consensus") {
         process.stderr.write(chalk.green("✓") + ` Consensus reached (${result.rounds} rounds)\n\n`);
@@ -385,7 +433,7 @@ export async function startRepl(
     // General config
     if (key === "startWith" && (value === "claude" || value === "codex")) {
       state.config.startWith = value;
-      orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
+      orchestrator = new Orchestrator(claude, codex, session, state.config, callbacks);
       process.stderr.write(chalk.dim(`  startWith set to ${value}\n\n`));
     } else if (key === "guardrailRounds" && !isNaN(parseInt(value, 10))) {
       state.config.guardrailRounds = parseInt(value, 10);
@@ -424,6 +472,14 @@ export async function startRepl(
     }
   });
 
+  commands.set("dashboard", () => {
+    if (dashboardUrl) {
+      process.stderr.write(`\n  ${chalk.cyan(dashboardUrl)}\n\n`);
+    } else {
+      process.stderr.write(chalk.dim("  Dashboard is not running.\n\n"));
+    }
+  });
+
   // --- Debate submission ---
   async function submitPrompt(prompt: string) {
     state.roundIndex++;
@@ -443,6 +499,7 @@ export async function startRepl(
 
     if (state.roundIndex === 1) {
       session.updatePrompt(state.sessionId, prompt);
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
     }
 
     state.debateInProgress = true;
@@ -452,6 +509,10 @@ export async function startRepl(
       1,
       state.config.guardrailRounds
     );
+    if (!dashboardHintShown && dashboardUrl) {
+      process.stderr.write(`\n  ${chalk.dim('Watch the debate live at')} ${chalk.cyan(dashboardUrl)}\n\n`);
+      dashboardHintShown = true;
+    }
 
     try {
       const result = await orchestrator.runWithHistory(
@@ -465,6 +526,8 @@ export async function startRepl(
       state.lastResult = result;
       state.messages = result.messages;
       state.roundStartTurn = Math.max(...state.messages.map((m) => m.turn), 0) + 1;
+      server?.broadcast({ type: "debate.result", sessionId: state.sessionId, result });
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
 
       if (result.type === "consensus") {
         process.stderr.write(chalk.green("✓") + ` Consensus reached (${result.rounds} rounds)\n\n`);
@@ -493,6 +556,7 @@ export async function startRepl(
       abortController.abort();
     } else {
       session.updateStatus(state.sessionId, "paused");
+      closeServer();
       process.stderr.write(`\n\nSession paused. Resume with: ${chalk.dim(`topg --resume ${state.sessionId}`)}\n`);
       process.exit(0);
     }
@@ -525,6 +589,7 @@ export async function startRepl(
 
   // EOF / readline close
   session.updateStatus(state.sessionId, "paused");
+  closeServer();
   process.stderr.write(`\nSession paused. Resume with: ${chalk.dim(`topg --resume ${state.sessionId}`)}\n`);
 }
 

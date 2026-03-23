@@ -451,6 +451,7 @@ export function createTopgServer(opts: TopgServerOptions) {
       for (const client of clients) {
         client.terminate();
       }
+      clients.clear();
       wss.close();
       httpServer.close();
     },
