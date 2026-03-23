@@ -96,7 +96,7 @@ export class Orchestrator {
       this.onTurnComplete?.(reviewMsg);
 
       // Check convergence
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
         return this.finishConsensus(messages, userPrompt, meta.sessionId, turn);
       }
 
@@ -127,6 +127,7 @@ export class Orchestrator {
   ): Promise<OrchestratorResult> {
     const messages: Message[] = [...existingMessages];
     let turn = Math.max(...existingMessages.map((m) => m.turn), 0);
+    const segmentStart = turn;
 
     // Turn 1: Initiator
     turn++;
@@ -177,7 +178,8 @@ export class Orchestrator {
       this.session.appendMessage(sessionId, reviewMsg);
       this.onTurnComplete?.(reviewMsg);
 
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      const segmentRounds = turn - segmentStart;
+      if (detectConvergence(messages, segmentRounds) || (segmentRounds > 3 && checkDiffStability(messages))) {
         return this.finishConsensus(messages, userPrompt, sessionId, turn, signal);
       }
 
@@ -233,6 +235,12 @@ export class Orchestrator {
 
     this.session.updateStatus(sessionId, "active");
 
+    // If convergence was already reached before pause (e.g. paused during synthesis),
+    // go straight to synthesis instead of creating another review turn
+    if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
+      return this.finishConsensus(messages, userPrompt, sessionId, turn);
+    }
+
     while (turn < lastTurn + this.config.guardrailRounds) {
       turn++;
 
@@ -252,7 +260,8 @@ export class Orchestrator {
       this.session.appendMessage(sessionId, reviewMsg);
       this.onTurnComplete?.(reviewMsg);
 
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      const segmentRounds = turn - lastTurn;
+      if (detectConvergence(messages, segmentRounds) || (segmentRounds > 3 && checkDiffStability(messages))) {
         return this.finishConsensus(messages, userPrompt, sessionId, turn);
       }
 
@@ -283,6 +292,7 @@ export class Orchestrator {
     const messages = [...previousResult.messages];
     const userPrompt = userGuidance;
     let turn = previousResult.rounds + 2; // after escalation turns
+    const segmentStart = turn;
 
     // Inject user guidance as a special message
     const guidanceMsg: Message = {
@@ -340,7 +350,8 @@ export class Orchestrator {
       this.session.appendMessage(sessionId, reviewMsg);
       this.onTurnComplete?.(reviewMsg);
 
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      const segmentRounds = turn - segmentStart;
+      if (detectConvergence(messages, segmentRounds) || (segmentRounds > 3 && checkDiffStability(messages))) {
         return this.finishConsensus(messages, userPrompt, sessionId, turn, signal);
       }
 

@@ -53,13 +53,16 @@ describe("Full collaboration loop", () => {
     const orch = new Orchestrator(claude, codex, session, config);
     const result = await orch.run("Design the API layer");
 
-    // Soft convergence: Claude agrees at turn 3 while Codex's last was partial → converges early
+    // Turn-aware convergence: soft consensus (agree + partial) is blocked at turn 3,
+    // so the debate continues to turn 4 where both agents signal agree (strong consensus).
     expect(result.type).toBe("consensus");
-    expect(result.rounds).toBe(3);
+    expect(result.rounds).toBe(4);
     // Summary comes from synthesis step — contains the actual deliverable
     expect(result.summary).toContain("REST API");
     expect(result.summary).toContain("Zod");
-    expect(result.messages).toHaveLength(4); // 3 debate turns + 1 consensus synthesis
+    // 4 debate turns + 1 consensus message from synthesis
+    expect(result.messages).toHaveLength(5);
+    expect(result.messages[4].type).toBe("consensus");
 
     // Verify session files were created
     const dirs = fs.readdirSync(tmpDir);

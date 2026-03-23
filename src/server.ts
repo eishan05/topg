@@ -445,6 +445,13 @@ export function createTopgServer(opts: TopgServerOptions) {
         debate.abortController.abort();
       }
       activeDebates.clear();
+      // Terminate connected WebSocket clients so the process can exit.
+      // wss.close() only stops accepting new connections — it does not
+      // close existing sockets, which keeps the event loop alive.
+      for (const client of clients) {
+        client.terminate();
+      }
+      clients.clear();
       wss.close();
       httpServer.close();
     },

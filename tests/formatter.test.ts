@@ -226,6 +226,64 @@ describe("formatConsensus prefers initiator message", () => {
   });
 });
 
+describe("formatConsensus strips claim bookkeeping sections", () => {
+  it("should strip ## Accepted Points and ## Contested Points from output", () => {
+    const messages: Message[] = [
+      {
+        role: "initiator",
+        agent: "claude",
+        turn: 1,
+        type: "code",
+        content: "Use React with TypeScript.\n\n## Accepted Points\n- [claim-1] TypeScript config (minor) — accepted\n\n## Contested Points\n- [claim-2] (critical) State management\n  **My position:** Use Zustand",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        role: "reviewer",
+        agent: "codex",
+        turn: 2,
+        type: "review",
+        content: "I agree.\n[CONVERGENCE: agree]",
+        convergenceSignal: "agree",
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const output = formatConsensus(messages, 2);
+    expect(output).toContain("Use React with TypeScript");
+    expect(output).not.toContain("## Accepted Points");
+    expect(output).not.toContain("## Contested Points");
+    expect(output).not.toContain("[claim-1]");
+    expect(output).not.toContain("[claim-2]");
+  });
+
+  it("should strip ## New Claims and ## Withdrawn sections", () => {
+    const messages: Message[] = [
+      {
+        role: "initiator",
+        agent: "claude",
+        turn: 1,
+        type: "code",
+        content: "Implement the API.\n\n## New Claims\n- [claim-3] (minor) Add rate limiting\n  **Argument:** Prevents abuse\n\n## Withdrawn\n- [claim-1] Withdrawn — no longer relevant",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        role: "reviewer",
+        agent: "codex",
+        turn: 2,
+        type: "review",
+        content: "Agreed.\n[CONVERGENCE: agree]",
+        convergenceSignal: "agree",
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const output = formatConsensus(messages, 2);
+    expect(output).toContain("Implement the API");
+    expect(output).not.toContain("## New Claims");
+    expect(output).not.toContain("## Withdrawn");
+  });
+});
+
 describe("formatter with user-prompt filtering", () => {
   it("should ignore user-prompt messages in getLastMessagePerAgent", () => {
     const messages: Message[] = [

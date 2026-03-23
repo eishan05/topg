@@ -28,7 +28,18 @@ Instructions:
 - If you disagree and suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.
 - Do not be contrarian for its own sake — if the work is solid, approve it
 - IMPORTANT: For simple requests, if the response is reasonable, approve it immediately with [CONVERGENCE: agree]. Do not nitpick trivial responses.
-- When you approve or mostly approve, present the COMPLETE REFINED SOLUTION incorporating any minor improvements. Do not just comment on the solution — present the improved version. The user needs to see the actual deliverable, not a review of it.`;
+- When you approve or mostly approve, present the COMPLETE REFINED SOLUTION incorporating any minor improvements. Do not just comment on the solution — present the improved version. The user needs to see the actual deliverable, not a review of it.
+
+Structure your feedback using these sections at the end of your response:
+
+## Contested Points
+- [claim-N] (critical|minor|style) One-line summary
+  **My position:** Your argument...
+
+## Accepted Points
+- Anything from the proposal you approve of (no claim ID needed for approvals)
+
+Omit sections that are empty.`;
 }
 
 export function rebuttalPrompt(reviewerAgent: AgentName): string {
@@ -42,7 +53,26 @@ For each piece of feedback:
 
 Do not accept changes that make the solution worse just to converge. Be specific about which suggestions you accept and which you reject.
 
-If you suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.`;
+If you suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.
+
+Respond to each contested claim by its ID. Structure your response using these sections at the end:
+
+## Accepted Points
+- [claim-N] Summary — accepted, reasoning...
+
+## Contested Points
+- [claim-N] (severity) Summary
+  **My position:** Your counter-argument...
+  **Severity dispute:** (optional) original → proposed, reasoning...
+
+## New Claims
+- [claim-N] (severity) Summary
+  **Argument:** ...
+
+## Withdrawn
+- [claim-N] Withdrawn — reason...
+
+Omit sections that are empty. Use the next available claim number for new claims.`;
 }
 
 export function synthesisPrompt(): string {
@@ -60,7 +90,10 @@ Rules:
 5. Do NOT include [CONVERGENCE: ...] tags
 6. The output should read as if a single expert produced it directly
 7. Preserve all technical detail, code blocks, structured formatting, and actionable content from the agreed-upon solution
-8. If the task was to produce a plan, output the plan. If it was to answer a question, output the answer. If it was to write code, output the code.`;
+8. If the task was to produce a plan, output the plan. If it was to answer a question, output the answer. If it was to write code, output the code.
+9. If there are contested points in the debate (visible in "## Contested Points" sections), handle them as follows:
+   - For "minor" or "style" contested points: use your best judgment to pick the stronger position. Do not mention the disagreement.
+   - For "critical" contested points: include a "## Open Questions" section at the end listing each critical disagreement with both positions, so the user can decide.`;
 }
 
 export function escalationPrompt(): string {
