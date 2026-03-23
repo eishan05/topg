@@ -109,8 +109,9 @@ export async function startRepl(
   resumeSessionId?: string
 ): Promise<void> {
   const session = new SessionManager();
-  const claude = new ClaudeAdapter(config.timeoutMs);
-  const codex = new CodexAdapter(config.timeoutMs, config.codex);
+  const yolo = !!config.yolo;
+  const claude = new ClaudeAdapter(config.timeoutMs, yolo);
+  const codex = new CodexAdapter(config.timeoutMs, config.codex, yolo);
 
   const spinner = createSpinner((text) => process.stderr.write(text));
 
@@ -150,6 +151,15 @@ export async function startRepl(
     state.roundStartTurn = Math.max(...loaded.messages.map((m) => m.turn), 0) + 1;
     state.config = { ...config, ...loaded.meta.config };
     codex.updateConfig(state.config.codex);
+    // If launched with --yolo, re-apply yolo overrides so a saved session
+    // can never downgrade permissions below what yolo guarantees.
+    if (yolo) {
+      codex.updateConfig({
+        sandboxMode: "danger-full-access",
+        approvalPolicy: "never",
+        networkAccessEnabled: true,
+      });
+    }
     orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
     session.updateStatus(resumeSessionId, "active");
   } else {
@@ -159,6 +169,9 @@ export async function startRepl(
 
   // Welcome banner
   process.stderr.write(`\n${chalk.bold("topg")} — inter-agent collaboration\n`);
+  if (yolo) {
+    process.stderr.write(chalk.red.bold("WARNING: --yolo mode enabled. All permission checks are disabled.\n"));
+  }
   process.stderr.write(`Session: ${chalk.dim(state.sessionId)}\n`);
   process.stderr.write(`Agents: ${chalk.magenta("Claude")} vs ${chalk.green("Codex")} (${state.config.startWith} goes first)\n`);
   const cx = state.config.codex;
@@ -281,6 +294,15 @@ export async function startRepl(
       state.escalationPending = false;
       Object.assign(state.config, loaded.meta.config);
       codex.updateConfig(state.config.codex);
+      // If launched with --yolo, re-apply yolo overrides so a saved session
+      // can never downgrade permissions below what yolo guarantees.
+      if (yolo) {
+        codex.updateConfig({
+          sandboxMode: "danger-full-access",
+          approvalPolicy: "never",
+          networkAccessEnabled: true,
+        });
+      }
       orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
       session.updateStatus(targetId, "active");
       process.stderr.write(`  Switched to session ${chalk.dim(targetId)} (${state.roundIndex} rounds)\n\n`);

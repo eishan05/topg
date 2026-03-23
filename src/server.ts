@@ -8,7 +8,7 @@ import { ClaudeAdapter } from "./adapters/claude-adapter.js";
 import { CodexAdapter } from "./adapters/codex-adapter.js";
 import { Orchestrator } from "./orchestrator.js";
 import { DEFAULT_CODEX_CONFIG } from "./types.js";
-import type { OrchestratorConfig, OrchestratorResult } from "./types.js";
+import type { CodexConfig, OrchestratorConfig, OrchestratorResult } from "./types.js";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -132,8 +132,9 @@ export function createTopgServer(opts: TopgServerOptions) {
   }
 
   function createAdapters(config: OrchestratorConfig) {
-    const claude = new ClaudeAdapter(config.timeoutMs);
-    const codex = new CodexAdapter(config.timeoutMs);
+    const yolo = !!config.yolo;
+    const claude = new ClaudeAdapter(config.timeoutMs, yolo);
+    const codex = new CodexAdapter(config.timeoutMs, config.codex, yolo);
     return { claude, codex };
   }
 
@@ -200,8 +201,25 @@ export function createTopgServer(opts: TopgServerOptions) {
       return;
     }
 
-    // Merge config
-    const msgConfig = (msg.config && typeof msg.config === "object") ? msg.config as Partial<OrchestratorConfig> : {};
+    // Merge config — strip dangerous fields that clients must not control.
+    // The server never honors `yolo` from WebSocket clients, and blocks
+    // `sandboxMode: "danger-full-access"` and `approvalPolicy` overrides.
+    const rawConfig = (msg.config && typeof msg.config === "object")
+      ? (msg.config as Record<string, unknown>)
+      : {};
+    const { yolo: _yolo, ...safeConfigFields } = rawConfig;
+    const msgConfig = safeConfigFields as Partial<OrchestratorConfig>;
+
+    if (msgConfig.codex && typeof msgConfig.codex === "object") {
+      const { sandboxMode, approvalPolicy, ...safeCodexFields } = msgConfig.codex as CodexConfig;
+      // Only allow sandboxMode if it's not the dangerous full-access mode
+      const safeSandbox = sandboxMode === "danger-full-access" ? undefined : sandboxMode;
+      msgConfig.codex = {
+        ...defaultConfig.codex,
+        ...safeCodexFields,
+        ...(safeSandbox ? { sandboxMode: safeSandbox } : {}),
+      };
+    }
     const config: OrchestratorConfig = { ...defaultConfig, ...msgConfig };
 
     // Create session
