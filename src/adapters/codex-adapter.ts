@@ -16,18 +16,32 @@ export class CodexAdapter implements AgentAdapter {
   private timeoutMs: number;
   private codexConfig: CodexConfig;
 
-  constructor(timeoutMs = 120_000, codexConfig?: Partial<CodexConfig>) {
+  constructor(timeoutMs = 120_000, codexConfig?: Partial<CodexConfig>, yolo = false) {
     this.client = new Codex();
     this.timeoutMs = timeoutMs;
-    this.codexConfig = {
-      sandboxMode: codexConfig?.sandboxMode ?? "workspace-write",
-      webSearchMode: codexConfig?.webSearchMode ?? "live",
-      networkAccessEnabled: codexConfig?.networkAccessEnabled ?? true,
-      approvalPolicy: codexConfig?.approvalPolicy ?? "never",
-      model: codexConfig?.model,
-      modelReasoningEffort: codexConfig?.modelReasoningEffort,
-      additionalDirectories: codexConfig?.additionalDirectories,
-    };
+
+    if (yolo) {
+      // In yolo mode, override to maximum permissions
+      this.codexConfig = {
+        sandboxMode: "danger-full-access",
+        webSearchMode: codexConfig?.webSearchMode ?? "live",
+        networkAccessEnabled: true,
+        approvalPolicy: "never",
+        model: codexConfig?.model,
+        modelReasoningEffort: codexConfig?.modelReasoningEffort,
+        additionalDirectories: codexConfig?.additionalDirectories,
+      };
+    } else {
+      this.codexConfig = {
+        sandboxMode: codexConfig?.sandboxMode ?? "workspace-write",
+        webSearchMode: codexConfig?.webSearchMode ?? "live",
+        networkAccessEnabled: codexConfig?.networkAccessEnabled ?? true,
+        approvalPolicy: codexConfig?.approvalPolicy ?? "never",
+        model: codexConfig?.model,
+        modelReasoningEffort: codexConfig?.modelReasoningEffort,
+        additionalDirectories: codexConfig?.additionalDirectories,
+      };
+    }
   }
 
   /**

@@ -109,8 +109,9 @@ export async function startRepl(
   resumeSessionId?: string
 ): Promise<void> {
   const session = new SessionManager();
-  const claude = new ClaudeAdapter(config.timeoutMs);
-  const codex = new CodexAdapter(config.timeoutMs, config.codex);
+  const yolo = !!config.yolo;
+  const claude = new ClaudeAdapter(config.timeoutMs, yolo);
+  const codex = new CodexAdapter(config.timeoutMs, config.codex, yolo);
 
   const spinner = createSpinner((text) => process.stderr.write(text));
 
@@ -159,6 +160,9 @@ export async function startRepl(
 
   // Welcome banner
   process.stderr.write(`\n${chalk.bold("topg")} — inter-agent collaboration\n`);
+  if (yolo) {
+    process.stderr.write(chalk.red.bold("WARNING: --yolo mode enabled. All permission checks are disabled.\n"));
+  }
   process.stderr.write(`Session: ${chalk.dim(state.sessionId)}\n`);
   process.stderr.write(`Agents: ${chalk.magenta("Claude")} vs ${chalk.green("Codex")} (${state.config.startWith} goes first)\n`);
   const cx = state.config.codex;

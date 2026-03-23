@@ -6,16 +6,23 @@ import type { AgentAdapter } from "./agent-adapter.js";
 export class ClaudeAdapter implements AgentAdapter {
   name: AgentName = "claude";
   private timeoutMs: number;
+  private yolo: boolean;
 
-  constructor(timeoutMs = 120_000) {
+  constructor(timeoutMs = 120_000, yolo = false) {
     this.timeoutMs = timeoutMs;
+    this.yolo = yolo;
   }
 
   async send(prompt: string, context: ConversationContext, signal?: AbortSignal): Promise<AgentResponse> {
     const fullPrompt = prompt;
 
     return new Promise((resolve, reject) => {
-      const proc = spawn("claude", ["-p", fullPrompt, "--output-format", "json"], {
+      const args = ["-p", fullPrompt, "--output-format", "json"];
+      if (this.yolo) {
+        args.push("--dangerously-skip-permissions");
+      }
+
+      const proc = spawn("claude", args, {
         cwd: context.workingDirectory,
         env: { ...process.env },
         stdio: ["ignore", "pipe", "pipe"],

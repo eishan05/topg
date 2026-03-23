@@ -132,8 +132,9 @@ export function createTopgServer(opts: TopgServerOptions) {
   }
 
   function createAdapters(config: OrchestratorConfig) {
-    const claude = new ClaudeAdapter(config.timeoutMs);
-    const codex = new CodexAdapter(config.timeoutMs);
+    const yolo = !!config.yolo;
+    const claude = new ClaudeAdapter(config.timeoutMs, yolo);
+    const codex = new CodexAdapter(config.timeoutMs, config.codex, yolo);
     return { claude, codex };
   }
 

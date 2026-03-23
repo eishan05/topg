@@ -110,6 +110,7 @@ export interface OrchestratorConfig {
   timeoutMs: number;
   outputFormat: "text" | "json";
   codex: CodexConfig;
+  yolo?: boolean;
 }
 
 export interface OrchestratorResult {

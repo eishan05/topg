@@ -68,6 +68,7 @@ program
   .option("--no-codex-network", "Disable network access for Codex")
   .option("--codex-model <model>", "Override model for Codex agent")
   .option("--codex-reasoning <effort>", "Codex reasoning effort (minimal, low, medium, high, xhigh)")
+  .option("--yolo", "Skip all permission checks: Claude gets --dangerously-skip-permissions, Codex gets full sandbox access")
   .action(async (prompt: string | undefined, opts) => {
     // Validate credentials
     if (!process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_API_KEY) {
@@ -88,6 +89,8 @@ program
       modelReasoningEffort: opts.codexReasoning as CodexConfig["modelReasoningEffort"],
     };
 
+    const yolo = !!opts.yolo;
+
     const config: OrchestratorConfig = {
       startWith: opts.startWith as AgentName,
       workingDirectory: opts.cwd,
@@ -95,6 +98,7 @@ program
       timeoutMs: parseInt(opts.timeout, 10) * 1000,
       outputFormat: opts.output as "text" | "json",
       codex: codexCfg,
+      yolo,
     };
 
     // Case 1: No prompt and no --resume → launch REPL
@@ -110,8 +114,11 @@ program
     }
 
     // Case 3 & 4: One-shot mode (existing behavior)
-    const claude = new ClaudeAdapter(config.timeoutMs);
-    const codex = new CodexAdapter(config.timeoutMs, config.codex);
+    if (yolo) {
+      console.error("WARNING: --yolo mode enabled. All permission checks are disabled.");
+    }
+    const claude = new ClaudeAdapter(config.timeoutMs, yolo);
+    const codex = new CodexAdapter(config.timeoutMs, config.codex, yolo);
     const session = new SessionManager();
 
     // When resuming, restore the session's stored Codex config
