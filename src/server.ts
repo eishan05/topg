@@ -1,6 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import { SessionManager } from "./session.js";
 import { ClaudeAdapter } from "./adapters/claude-adapter.js";
@@ -43,8 +44,10 @@ export function createTopgServer(opts: TopgServerOptions) {
 
   const activeDebates = new Map<string, ActiveDebate>();
 
-  // Resolve static files relative to project root, NOT __dirname.
-  // After tsc build, __dirname will be dist/, but static assets stay in src/web/public/.
+  // Resolve static files relative to project root, NOT the current module dir.
+  // After tsc build, this file is at dist/server.js, but static assets stay in src/web/public/.
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
   const projectRoot = path.resolve(__dirname, "..");
   const publicDir = path.join(projectRoot, "src", "web", "public");
 
