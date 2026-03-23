@@ -193,6 +193,144 @@ describe("Orchestrator", () => {
   });
 });
 
+describe("synthesis step", () => {
+  it("should use synthesized output as summary when consensus is reached", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-synth-"));
+    const session = new SessionManager(tmpDir);
+
+    // Claude gets called twice: once for initiator, once for synthesis
+    let claudeCallCount = 0;
+    const claude: AgentAdapter = {
+      name: "claude",
+      send: vi.fn(async () => {
+        claudeCallCount++;
+        if (claudeCallCount === 1) {
+          // Initial response
+          return { content: "## Plan\n\n1. Use React\n2. Add TypeScript\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const };
+        }
+        // Synthesis call
+        return { content: "## Plan\n\n1. Use React with Next.js\n2. Add TypeScript with strict mode\n3. Configure ESLint" };
+      }),
+    };
+
+    const codex = createMockAdapter("codex", [
+      { content: "I agree, looks great.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const },
+    ]);
+
+    const orch = new Orchestrator(claude, codex, session, defaultConfig);
+    const result = await orch.run("Build a frontend");
+
+    expect(result.type).toBe("consensus");
+    // Summary should be the synthesized output, not the reviewer's meta-review
+    expect(result.summary).toContain("Use React with Next.js");
+    expect(result.summary).toContain("strict mode");
+    expect(result.summary).not.toContain("I agree, looks great");
+
+    // Claude should have been called twice (initiator + synthesis)
+    expect(claude.send).toHaveBeenCalledTimes(2);
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should fall back to formatConsensus when synthesis fails", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-synth-fallback-"));
+    const session = new SessionManager(tmpDir);
+
+    let claudeCallCount = 0;
+    const claude: AgentAdapter = {
+      name: "claude",
+      send: vi.fn(async () => {
+        claudeCallCount++;
+        if (claudeCallCount === 1) {
+          return { content: "Use React.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const };
+        }
+        // Synthesis call fails
+        throw new Error("API timeout");
+      }),
+    };
+
+    const codex = createMockAdapter("codex", [
+      { content: "Agreed.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const },
+    ]);
+
+    const orch = new Orchestrator(claude, codex, session, defaultConfig);
+    const result = await orch.run("What framework?");
+
+    expect(result.type).toBe("consensus");
+    // Should fall back to formatConsensus output (which now prefers initiator)
+    expect(result.summary).toContain("Use React");
+    expect(result.summary).toContain("[CONSENSUS after");
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should pass the synthesis prompt to the initiator agent", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-synth-prompt-"));
+    const session = new SessionManager(tmpDir);
+
+    let synthesisPromptReceived = "";
+    let claudeCallCount = 0;
+    const claude: AgentAdapter = {
+      name: "claude",
+      send: vi.fn(async (prompt: string) => {
+        claudeCallCount++;
+        if (claudeCallCount === 1) {
+          return { content: "Use React.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const };
+        }
+        // Capture the synthesis prompt
+        synthesisPromptReceived = prompt;
+        return { content: "Final answer: Use React" };
+      }),
+    };
+
+    const codex = createMockAdapter("codex", [
+      { content: "Agreed.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const },
+    ]);
+
+    const orch = new Orchestrator(claude, codex, session, defaultConfig);
+    await orch.run("What framework?");
+
+    // The synthesis prompt should contain key synthesis instructions
+    expect(synthesisPromptReceived).toContain("FINAL DELIVERABLE");
+    expect(synthesisPromptReceived).toContain("Original User Request");
+    expect(synthesisPromptReceived).toContain("Collaboration Transcript");
+    expect(synthesisPromptReceived).toContain("What framework?");
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe("synthesis abort handling", () => {
+  it("should re-throw abort errors during synthesis instead of swallowing them", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-synth-abort-"));
+    const session = new SessionManager(tmpDir);
+
+    let claudeCallCount = 0;
+    const claude: AgentAdapter = {
+      name: "claude",
+      send: vi.fn(async () => {
+        claudeCallCount++;
+        if (claudeCallCount === 1) {
+          return { content: "Use React.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const };
+        }
+        // Synthesis call aborted
+        throw new Error("aborted");
+      }),
+    };
+
+    const codex = createMockAdapter("codex", [
+      { content: "Agreed.\n[CONVERGENCE: agree]", convergenceSignal: "agree" as const },
+    ]);
+
+    const orch = new Orchestrator(claude, codex, session, defaultConfig);
+
+    // The abort should propagate, not be swallowed
+    await expect(orch.run("What framework?")).rejects.toThrow("aborted");
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
 describe("runWithHistory", () => {
   it("should start with existing messages and reach consensus", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-hist-"));

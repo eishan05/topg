@@ -1,4 +1,5 @@
 import type { Message, Artifact, ToolActivity } from "./types.js";
+import { capitalize } from "./utils.js";
 
 export function formatConsensus(messages: Message[], rounds: number): string {
   const lastMessages = getLastMessagePerAgent(messages);
@@ -7,8 +8,11 @@ export function formatConsensus(messages: Message[], rounds: number): string {
   let output = `[CONSENSUS after ${rounds} rounds]\n\n`;
   output += `## Agreed Approach\n\n`;
 
-  const agentMessages = messages.filter((m) => m.type !== "user-prompt");
-  const finalMsg = agentMessages[agentMessages.length - 1];
+  const agentMessages = messages.filter((m) => m.type !== "user-prompt" && m.type !== "user-guidance");
+  // Prefer the initiator's last substantive message over a reviewer's meta-review.
+  // The initiator typically has the actual deliverable content while the reviewer
+  // often just comments on it (e.g. "Your plan is solid...").
+  const finalMsg = findBestConsensusMessage(agentMessages) ?? agentMessages[agentMessages.length - 1];
   output += finalMsg.content.replace(/\[CONVERGENCE:.*?\]/gi, "").trim();
   output += "\n\n";
 
@@ -55,6 +59,36 @@ export function formatEscalation(messages: Message[], rounds: number): string {
   return output;
 }
 
+/**
+ * Find the best message to use as the consensus output.
+ *
+ * In the orchestrator, only turn 1 carries role:"initiator" — all subsequent
+ * turns (rebuttals included) are tagged role:"reviewer".  So we cannot rely
+ * on the role field to locate the revised deliverable.
+ *
+ * Instead we use agent identity: the agent that opened the debate (agentA)
+ * typically carries the substantive answer, while the other agent's final
+ * message is often meta-commentary ("Your plan is solid…").  We prefer the
+ * last message from the *same agent* that wrote the first (turn-1) message,
+ * falling back to the absolute last message if we cannot determine it.
+ */
+function findBestConsensusMessage(agentMessages: Message[]): Message | null {
+  if (agentMessages.length === 0) return null;
+
+  // Identify the initiating agent (first message's agent)
+  const initiatingAgent = agentMessages[0].agent;
+
+  // Walk backwards to find the last message from the initiating agent
+  for (let i = agentMessages.length - 1; i >= 0; i--) {
+    if (agentMessages[i].agent === initiatingAgent) {
+      return agentMessages[i];
+    }
+  }
+
+  // Fallback to the last message
+  return agentMessages[agentMessages.length - 1];
+}
+
 function getLastMessagePerAgent(messages: Message[]): Message[] {
   const byAgent = new Map<string, Message>();
   for (const msg of messages) {
@@ -76,10 +110,6 @@ function collectArtifacts(messages: Message[]): Artifact[] {
     }
   }
   return artifacts;
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function firstSentence(s: string): string {

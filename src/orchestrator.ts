@@ -1,9 +1,10 @@
 import type { AgentAdapter } from "./adapters/agent-adapter.js";
 import type { Message, OrchestratorConfig, OrchestratorResult, AgentName } from "./types.js";
 import { detectConvergence, checkDiffStability } from "./convergence.js";
-import { initiatorPrompt, reviewerPrompt, rebuttalPrompt, escalationPrompt, userGuidancePrompt, formatTurnPrompt } from "./prompts.js";
+import { initiatorPrompt, reviewerPrompt, rebuttalPrompt, escalationPrompt, userGuidancePrompt, formatTurnPrompt, synthesisPrompt } from "./prompts.js";
 import { formatConsensus, formatEscalation } from "./formatter.js";
 import { SessionManager } from "./session.js";
+import { capitalize } from "./utils.js";
 
 export type TurnCallback = (turn: number, agent: AgentName, role: string) => void;
 export type TurnCompleteCallback = (message: Message) => void;
@@ -96,7 +97,8 @@ export class Orchestrator {
 
       // Check convergence
       if (detectConvergence(messages) || checkDiffStability(messages)) {
-        const summary = formatConsensus(messages, turn);
+        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB });
+        const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(meta.sessionId, summary);
         this.session.updateStatus(meta.sessionId, "completed");
         return { type: "consensus", sessionId: meta.sessionId, rounds: turn, summary, messages };
@@ -180,7 +182,8 @@ export class Orchestrator {
       this.onTurnComplete?.(reviewMsg);
 
       if (detectConvergence(messages) || checkDiffStability(messages)) {
-        const summary = formatConsensus(messages, turn);
+        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB }, signal);
+        const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(sessionId, summary);
         this.session.updateStatus(sessionId, "completed");
         return { type: "consensus", sessionId, rounds: turn, summary, messages };
@@ -258,7 +261,8 @@ export class Orchestrator {
       this.onTurnComplete?.(reviewMsg);
 
       if (detectConvergence(messages) || checkDiffStability(messages)) {
-        const summary = formatConsensus(messages, turn);
+        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB });
+        const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(sessionId, summary);
         this.session.updateStatus(sessionId, "completed");
         return { type: "consensus", sessionId, rounds: turn, summary, messages };
@@ -349,7 +353,8 @@ export class Orchestrator {
       this.onTurnComplete?.(reviewMsg);
 
       if (detectConvergence(messages) || checkDiffStability(messages)) {
-        const summary = formatConsensus(messages, turn);
+        const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB }, signal);
+        const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(sessionId, summary);
         this.session.updateStatus(sessionId, "completed");
         return { type: "consensus", sessionId, rounds: turn, summary, messages };
@@ -371,6 +376,41 @@ export class Orchestrator {
     this.session.saveSummary(sessionId, summary);
     this.session.updateStatus(sessionId, "escalated");
     return { type: "escalation", sessionId, rounds: turn, summary, messages };
+  }
+
+  private async synthesize(
+    messages: Message[],
+    userPrompt: string,
+    agents: { initiator: AgentAdapter; reviewer: AgentAdapter },
+    signal?: AbortSignal
+  ): Promise<string | null> {
+    try {
+      const transcript = messages
+        .map((m) => {
+          if (m.type === "user-prompt") return `[User's Original Request]:\n${m.content}`;
+          if (m.type === "user-guidance") return `[User Guidance]:\n${m.content}`;
+          return `[${capitalize(m.agent)} — ${m.type}]:\n${m.content}`;
+        })
+        .join("\n\n---\n\n");
+
+      const prompt = `${synthesisPrompt()}\n\n## Original User Request\n\n${userPrompt}\n\n## Collaboration Transcript\n\n${transcript}`;
+
+      const response = await agents.initiator.send(prompt, {
+        sessionId: "",
+        history: messages,
+        workingDirectory: this.config.workingDirectory,
+        systemPrompt: synthesisPrompt(),
+      }, signal);
+
+      return response.content?.trim() || null;
+    } catch (err: unknown) {
+      // Re-throw abort errors so cancellation propagates correctly
+      // (mirrors the abort handling in runEscalation)
+      if (err instanceof Error && err.message === "aborted") {
+        throw err;
+      }
+      return null; // Fallback to formatConsensus behavior
+    }
   }
 
   private async runEscalation(

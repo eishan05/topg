@@ -25,9 +25,10 @@ Instructions:
   3. **Quality**: Are there clear improvements that would meaningfully benefit the user?
 - If all three pass, approve with [CONVERGENCE: agree]
 - If any fail, explain specifically what fails and why
-- If you suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.
+- If you disagree and suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.
 - Do not be contrarian for its own sake — if the work is solid, approve it
-- IMPORTANT: For simple requests, if the response is reasonable, approve it immediately with [CONVERGENCE: agree]. Do not nitpick trivial responses.`;
+- IMPORTANT: For simple requests, if the response is reasonable, approve it immediately with [CONVERGENCE: agree]. Do not nitpick trivial responses.
+- When you approve or mostly approve, present the COMPLETE REFINED SOLUTION incorporating any minor improvements. Do not just comment on the solution — present the improved version. The user needs to see the actual deliverable, not a review of it.`;
 }
 
 export function rebuttalPrompt(reviewerAgent: AgentName): string {
@@ -42,6 +43,24 @@ For each piece of feedback:
 Do not accept changes that make the solution worse just to converge. Be specific about which suggestions you accept and which you reject.
 
 If you suggest changes, be surgical: quote the specific part you'd change and provide the replacement. Do not rewrite the entire response if only part needs changing.`;
+}
+
+export function synthesisPrompt(): string {
+  return `You are producing the final, consolidated answer from a multi-agent collaboration.
+
+You have access to the full debate transcript between two AI agents who collaborated on the user's request. They have reached consensus.
+
+Your job is to produce the FINAL DELIVERABLE — the actual answer to the user's original question or task. This is NOT a summary of the debate or a review of what was discussed.
+
+Rules:
+1. Output ONLY the final answer/deliverable as if you were directly answering the user's original question
+2. Incorporate all improvements, corrections, and refinements that emerged during the debate
+3. Do NOT include meta-commentary about the debate process (no "both agents agreed...", no "after review...")
+4. Do NOT mention the collaboration, the other agent, or the review process
+5. Do NOT include [CONVERGENCE: ...] tags
+6. The output should read as if a single expert produced it directly
+7. Preserve all technical detail, code blocks, structured formatting, and actionable content from the agreed-upon solution
+8. If the task was to produce a plan, output the plan. If it was to answer a question, output the answer. If it was to write code, output the code.`;
 }
 
 export function escalationPrompt(): string {

@@ -41,6 +41,8 @@ describe("Full collaboration loop", () => {
     const claude = createScriptedAdapter("claude", [
       { content: "I propose a REST API with Express.\n[CONVERGENCE: partial]", convergenceSignal: "partial" },
       { content: "Good point about type safety. REST API with Express + Zod validation.\n[CONVERGENCE: agree]", convergenceSignal: "agree" },
+      // Synthesis step response
+      { content: "## API Layer Design\n\nUse a REST API built with Express and Zod for input validation." },
     ]);
 
     const codex = createScriptedAdapter("codex", [
@@ -54,7 +56,9 @@ describe("Full collaboration loop", () => {
     // Soft convergence: Claude agrees at turn 3 while Codex's last was partial → converges early
     expect(result.type).toBe("consensus");
     expect(result.rounds).toBe(3);
-    expect(result.summary).toContain("[CONSENSUS");
+    // Summary comes from synthesis step — contains the actual deliverable
+    expect(result.summary).toContain("REST API");
+    expect(result.summary).toContain("Zod");
     expect(result.messages).toHaveLength(3);
 
     // Verify session files were created

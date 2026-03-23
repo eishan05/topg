@@ -5,6 +5,7 @@ import {
   rebuttalPrompt,
   escalationPrompt,
   userGuidancePrompt,
+  synthesisPrompt,
   formatConversationHistory,
   formatTurnPrompt,
   summarizeHistory,
@@ -59,6 +60,12 @@ describe("reviewerPrompt", () => {
     expect(prompt).toContain("surgical");
     expect(prompt).toContain("Do not rewrite the entire response");
   });
+
+  it("should instruct reviewer to present the complete refined solution", () => {
+    const prompt = reviewerPrompt("claude");
+    expect(prompt).toContain("COMPLETE REFINED SOLUTION");
+    expect(prompt).toContain("actual deliverable");
+  });
 });
 
 describe("rebuttalPrompt", () => {
@@ -77,6 +84,29 @@ describe("rebuttalPrompt", () => {
   it("should include surgical output instruction", () => {
     const prompt = rebuttalPrompt("codex");
     expect(prompt).toContain("surgical");
+  });
+});
+
+describe("synthesisPrompt", () => {
+  it("should instruct producing the final deliverable", () => {
+    const prompt = synthesisPrompt();
+    expect(prompt).toContain("FINAL DELIVERABLE");
+  });
+
+  it("should prohibit meta-commentary about the debate", () => {
+    const prompt = synthesisPrompt();
+    expect(prompt).toContain("Do NOT include meta-commentary");
+    expect(prompt).toContain("Do NOT mention the collaboration");
+  });
+
+  it("should prohibit convergence tags in output", () => {
+    const prompt = synthesisPrompt();
+    expect(prompt).toContain("Do NOT include [CONVERGENCE:");
+  });
+
+  it("should instruct preserving technical detail", () => {
+    const prompt = synthesisPrompt();
+    expect(prompt).toContain("Preserve all technical detail");
   });
 });
 
