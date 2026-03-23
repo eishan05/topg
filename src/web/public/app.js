@@ -434,14 +434,16 @@
 
     track.innerHTML = "";
 
-    // Build one segment per message
-    var messages = state.currentMessages;
+    // Only count debate turns (exclude user-prompt, user-guidance, consensus, deadlock)
+    var debateMessages = state.currentMessages.filter(function (m) {
+      return m.type === "code" || m.type === "review" || m.type === "debate";
+    });
     var maxRounds = (state.currentMeta && state.currentMeta.config)
       ? state.currentMeta.config.guardrailRounds
       : 5;
 
-    for (var i = 0; i < messages.length; i++) {
-      var msg = messages[i];
+    for (var i = 0; i < debateMessages.length; i++) {
+      var msg = debateMessages[i];
       var seg = document.createElement("div");
       seg.className = "convergence-segment";
 
@@ -456,7 +458,7 @@
     }
 
     // Pad remaining segments
-    var remaining = maxRounds * 2 - messages.length; // 2 messages per round
+    var remaining = maxRounds * 2 - debateMessages.length; // 2 messages per round
     for (var r = 0; r < remaining && r < 20; r++) {
       var empty = document.createElement("div");
       empty.className = "convergence-segment pending";
@@ -464,8 +466,8 @@
     }
 
     if (roundsLabel) {
-      // Show actual turn count
-      var lastTurn = messages.length > 0 ? messages[messages.length - 1].turn : 0;
+      // Show actual debate turn count (not synthesis/guidance turn numbers)
+      var lastTurn = debateMessages.length > 0 ? debateMessages[debateMessages.length - 1].turn : 0;
       roundsLabel.textContent = lastTurn + " / " + maxRounds + " rounds";
     }
   }
