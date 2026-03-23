@@ -90,6 +90,20 @@ export class ClaudeAdapter implements AgentAdapter {
           return;
         }
 
+        // Flush any remaining data in lineBuffer (e.g. final line without trailing \n)
+        const remaining = lineBuffer.trim();
+        if (remaining) {
+          try {
+            const event = JSON.parse(remaining);
+            if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+              fullContent += event.delta.text;
+              onChunk?.(event.delta.text);
+            } else if (event.type === "result") {
+              resultContent = event.result ?? null;
+            }
+          } catch { /* ignore malformed trailing data */ }
+        }
+
         // Prefer the result event's content (authoritative), fall back to accumulated deltas
         const content = resultContent ?? fullContent;
         const convergenceSignal = parseConvergenceTag(content);

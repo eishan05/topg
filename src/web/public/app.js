@@ -18,6 +18,7 @@
     streamingAgent: null,  // agent name for the current streaming turn
     streamingTurn: null,   // turn number for the current streaming message
     streamingRole: null,   // role for the current streaming message
+    streamingRAF: null,    // requestAnimationFrame handle for throttled DOM updates
   };
 
   // ── DOM refs ───────────────────────────────────────────────────────
@@ -220,13 +221,24 @@
     var indicator = $id("typing-indicator");
     if (indicator) indicator.style.display = "none";
 
+    // Throttle DOM updates with requestAnimationFrame to prevent layout thrashing
+    // when chunks arrive faster than the browser can paint.
+    if (!state.streamingRAF) {
+      state.streamingRAF = requestAnimationFrame(function () {
+        state.streamingRAF = null;
+        flushStreamingDOM();
+      });
+    }
+  }
+
+  function flushStreamingDOM() {
     var thread = $id("thread");
     if (!thread) return;
 
-    // Create the streaming message element on first chunk
+    // Create the streaming message element on first flush
     if (!state.streamingEl) {
       state.streamingEl = renderMessage({
-        agent: state.streamingAgent || msg.agent,
+        agent: state.streamingAgent,
         role: state.streamingRole || "initiator",
         turn: state.streamingTurn || 0,
         content: state.streamingContent,
@@ -234,7 +246,9 @@
       state.streamingEl.classList.add("streaming");
       thread.appendChild(state.streamingEl);
     } else {
-      // Update the content area of the existing streaming element
+      // Update the content area of the existing streaming element.
+      // Safe to use innerHTML: parseContent() calls escapeHtml() before any
+      // HTML construction, so model output cannot inject scripts or tags.
       var contentEl = state.streamingEl.querySelector(".message-content");
       if (contentEl) {
         contentEl.innerHTML = parseContent(state.streamingContent);
@@ -267,13 +281,7 @@
         thread.scrollTop = thread.scrollHeight;
       }
 
-      // Clear streaming state
-      state.streamingContent = "";
-      state.streamingEl = null;
-      state.streamingAgent = null;
-      state.streamingTurn = null;
-      state.streamingRole = null;
-
+      clearStreamingState();
       updateConvergenceBar();
     }
   }
@@ -392,7 +400,21 @@
 
   // ── Select Session ─────────────────────────────────────────────────
 
+  function clearStreamingState() {
+    state.streamingContent = "";
+    state.streamingEl = null;
+    state.streamingAgent = null;
+    state.streamingTurn = null;
+    state.streamingRole = null;
+    if (state.streamingRAF) {
+      cancelAnimationFrame(state.streamingRAF);
+      state.streamingRAF = null;
+    }
+  }
+
   function selectSession(sessionId) {
+    // Clear any in-progress streaming state from the previous session
+    clearStreamingState();
     state.currentSessionId = sessionId;
 
     fetch("/api/sessions/" + encodeURIComponent(sessionId))

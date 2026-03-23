@@ -414,6 +414,8 @@ export class Orchestrator {
 
       const prompt = `${synthesisPrompt()}\n\n## Original User Request\n\n${userPrompt}\n\n## Collaboration Transcript\n\n${transcript}`;
 
+      // No streaming for synthesis — the result is post-processed before display,
+      // so streaming chunks to the client would be misleading.
       const response = await agents.initiator.send(prompt, {
         sessionId: "",
         history: messages,

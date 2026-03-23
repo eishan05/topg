@@ -88,7 +88,9 @@ export class CodexAdapter implements AgentAdapter {
     ]);
 
     const content = result.finalResponse ?? String(result);
-    // Codex SDK doesn't expose streaming — emit entire response as one chunk
+    // Codex SDK doesn't expose streaming — emit the entire response as a single
+    // chunk. On the dashboard this means Codex turns jump from "thinking..." to
+    // the full message without incremental updates (unlike Claude's token stream).
     onChunk?.(content);
     const convergenceSignal = parseConvergenceTag(content);
     const toolActivities = extractToolActivities(result.items);
