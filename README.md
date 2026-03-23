@@ -9,7 +9,7 @@ Listen. Most developers out there are using ONE AI model like broke people drivi
 
 **TOPG escapes the matrix.**
 
-TOPG throws Claude and Codex into the arena. Two elite AI agents. Head to head. No mercy. They debate, they argue, they tear each other's solutions apart — and what comes out the other side is a battle-tested answer that ACTUALLY WORKS. Because the best ideas don't come from comfort. They come from WAR.
+TOPG throws Claude and Codex into the arena. Two elite AI agents. Head to head. No mercy. They debate, they argue, they tear each other's solutions apart, and what comes out the other side is a battle-tested answer that ACTUALLY WORKS. Because the best ideas don't come from comfort. They come from WAR.
 
 > "If you're making architectural decisions with only one AI, you're mentally broke."
 
@@ -17,7 +17,7 @@ TOPG throws Claude and Codex into the arena. Two elite AI agents. Head to head. 
 
 ## What Is This
 
-TOPG is a TypeScript CLI that orchestrates **turn-based debates between Claude and Codex**. You give it a problem. Both agents fight over the solution. They critique each other's code. They defend their positions. They either converge on the superior answer — or they escalate to you with a structured disagreement report so YOU can be the judge.
+TOPG is a TypeScript CLI that orchestrates **turn-based debates between Claude and Codex**. You give it a problem. Both agents fight over the solution. They critique each other's code. They defend their positions. They either converge on the superior answer, or they escalate to you with a structured disagreement report so YOU can be the judge.
 
 This is **intellectual combat**.
 
@@ -68,11 +68,17 @@ export OPENAI_API_KEY="your-key"
 
 Already paying for Claude Pro/Max or a Codex subscription? **You're already covered.** TOPG works with your existing subscriptions. You're literally leaving money on the table if you're NOT using this.
 
+Think about it. You're paying for TWO of the most powerful AI models on the planet and you're using them ONE AT A TIME like a guy with two Bugattis who only drives on Sundays. That's not hustle. That's waste. That's BROKE behavior with a rich man's credit card.
+
+TOPG makes your subscriptions WORK FOR YOU. While you sleep, while you think, while you sip your coffee, two AI gladiators are in the arena destroying each other's weak arguments so YOU get the strongest answer. That's leverage. That's what separates the Top G from the NPCs.
+
+> "What color is your Bugatti?" Irrelevant. What matters is: are your AI models fighting for you, or are they sitting idle like expensive furniture?
+
 ---
 
 ## Usage
 
-### One-Shot Mode — Ask and Receive
+### One-Shot Mode: Ask and Receive
 
 ```bash
 topg "Design a rate limiter that handles distributed systems"
@@ -80,7 +86,7 @@ topg "Design a rate limiter that handles distributed systems"
 
 Both agents fight. You get the winner's answer. Simple.
 
-### REPL Mode — The War Room
+### REPL Mode: The War Room
 
 ```bash
 topg
@@ -104,7 +110,7 @@ Come back to a deadlocked debate with fresh guidance. YOU are the top G. You bre
 |------|-------------|
 | `--start-with <claude\|codex>` | Pick who throws the first punch |
 | `--guardrail <N>` | Rounds before escalation (default: 5) |
-| `--timeout <seconds>` | Per-turn time limit — no stalling |
+| `--timeout <seconds>` | Per-turn time limit, no stalling |
 | `--yolo` | Skip all permission checks. Full send. |
 | `--no-dashboard` | No web UI. Raw terminal output only. |
 | `--cwd <path>` | Working directory for the agents |
@@ -115,7 +121,7 @@ Come back to a deadlocked debate with fresh guidance. YOU are the top G. You bre
 topg --yolo "Refactor the entire payment system"
 ```
 
-This is how real G's outside the matrix operate. `--yolo` skips ALL permission checks for both agents — Claude gets `--dangerously-skip-permissions`, Codex gets full sandbox access. No confirmation dialogs. No "are you sure?" popups. No waiting for approval from your corporate overlord to run a command on YOUR computer.
+This is how real G's outside the matrix operate. `--yolo` skips ALL permission checks for both agents. Claude gets `--dangerously-skip-permissions`, Codex gets full sandbox access. No confirmation dialogs. No "are you sure?" popups. No waiting for approval from your corporate overlord to run a command on YOUR computer.
 
 If you need to raise your hand and ask permission to execute code on a machine you own, you are living in the matrix. You are a brokie in the system. You are an NPC.
 
@@ -152,11 +158,11 @@ CONSENSUS    ESCALATION
  (ship it)   (you decide)
 ```
 
-1. **Turn 1** — Initiator proposes a solution
-2. **Turn 2+** — Reviewer critiques with structured claims
-3. **Rebuttals** — Point-by-point responses, no hand-waving
-4. **Convergence Detection** — Agreement phrases, structured tags, or diff stability
-5. **Resolution** — Either consensus or structured disagreement report
+1. **Turn 1:** Initiator proposes a solution
+2. **Turn 2+:** Reviewer critiques with structured claims
+3. **Rebuttals:** Point-by-point responses, no hand-waving
+4. **Convergence Detection:** Agreement phrases, structured tags, or diff stability
+5. **Resolution:** Either consensus or structured disagreement report
 
 The system tracks individual claims using `[claim-N]` sections so nothing gets lost in the noise. Every point must be addressed. No dodging.
 
@@ -215,8 +221,8 @@ topg "your hardest problem here"
 
 ```
 src/
-├── index.ts              # CLI entry — Commander setup
-├── orchestrator.ts       # The arena — turn-based debate loop
+├── index.ts              # CLI entry, Commander setup
+├── orchestrator.ts       # The arena, turn-based debate loop
 ├── convergence.ts        # Detects when the fight is over
 ├── adapters/
 │   ├── claude-adapter.ts # Claude CLI integration
