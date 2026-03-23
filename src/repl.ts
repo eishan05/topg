@@ -3,6 +3,7 @@ import chalk from "chalk";
 import { ClaudeAdapter } from "./adapters/claude-adapter.js";
 import { CodexAdapter } from "./adapters/codex-adapter.js";
 import { Orchestrator } from "./orchestrator.js";
+import type { OrchestratorCallbacks } from "./orchestrator.js";
 import { SessionManager } from "./session.js";
 import { createTopgServer } from "./server.js";
 import type { AgentName, CodexConfig, Message, OrchestratorConfig, OrchestratorResult } from "./types.js";
@@ -105,9 +106,14 @@ interface ReplState {
 
 // --- REPL ---
 
+export interface ReplOptions {
+  dashboard?: boolean;
+}
+
 export async function startRepl(
   config: OrchestratorConfig,
-  resumeSessionId?: string
+  resumeSessionId?: string,
+  options?: ReplOptions
 ): Promise<void> {
   const session = new SessionManager();
   const yolo = !!config.yolo;
@@ -116,10 +122,29 @@ export async function startRepl(
 
   const spinner = createSpinner((text) => process.stderr.write(text));
 
-  // Start the web dashboard server in the background
-  const server = createTopgServer({ port: 0, sessionManager: session });
-  const dashboardPort = await server.start();
-  const dashboardUrl = `http://localhost:${dashboardPort}`;
+  // Start the web dashboard server in the background (unless --no-dashboard)
+  const enableDashboard = options?.dashboard !== false;
+  let server: ReturnType<typeof createTopgServer> | null = null;
+  let dashboardUrl: string | null = null;
+
+  if (enableDashboard) {
+    server = createTopgServer({ port: 0, sessionManager: session });
+    try {
+      const dashboardPort = await server.start();
+      dashboardUrl = `http://localhost:${dashboardPort}`;
+    } catch {
+      process.stderr.write(chalk.dim("Dashboard unavailable (port binding failed)\n"));
+      server = null;
+    }
+  }
+
+  let serverClosed = false;
+  function closeServer() {
+    if (server && !serverClosed) {
+      serverClosed = true;
+      server.close();
+    }
+  }
 
   let abortController: AbortController | null = null;
 
@@ -137,8 +162,8 @@ export async function startRepl(
 
   let dashboardHintShown = false;
 
-  const callbacks = {
-    onTurnStart: (turn: number, agent: AgentName, role: string) => {
+  const callbacks: OrchestratorCallbacks = {
+    onTurnStart: (turn, agent, role) => {
       const label = agent === "claude"
         ? chalk.magenta("Claude")
         : chalk.green("Codex");
@@ -148,12 +173,10 @@ export async function startRepl(
       } else {
         spinner.start(`${label} (${role}) responding...`, relativeTurn, state.config.guardrailRounds);
       }
-      // Broadcast to dashboard
-      server.broadcast({ type: "turn.start", sessionId: state.sessionId, turn, agent, role });
+      server?.broadcast({ type: "turn.start", sessionId: state.sessionId, turn, agent, role });
     },
-    onTurnComplete: (message: Message) => {
-      // Broadcast to dashboard
-      server.broadcast({ type: "turn.complete", sessionId: state.sessionId, message });
+    onTurnComplete: (message) => {
+      server?.broadcast({ type: "turn.complete", sessionId: state.sessionId, message });
     },
   };
 
@@ -181,7 +204,7 @@ export async function startRepl(
   } else {
     const meta = session.create("(interactive session)", config);
     state.sessionId = meta.sessionId;
-    server.broadcast({ type: "sessions.list", sessions: session.listSessions() });
+    server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
   }
 
   // Welcome banner
@@ -199,7 +222,9 @@ export async function startRepl(
   if (capabilities.length > 0) {
     process.stderr.write(`Codex: ${chalk.dim(capabilities.join(", "))}\n`);
   }
-  process.stderr.write(`Dashboard: ${chalk.cyan(dashboardUrl)}\n`);
+  if (dashboardUrl) {
+    process.stderr.write(`Dashboard: ${chalk.cyan(dashboardUrl)}\n`);
+  }
   process.stderr.write(`Type a prompt to start a debate, or ${chalk.dim("/help")} for commands.\n\n`);
 
   // Readline
@@ -214,7 +239,7 @@ export async function startRepl(
 
   commands.set("quit", () => {
     session.updateStatus(state.sessionId, "paused");
-    server.close();
+    closeServer();
     process.stderr.write(`\nSession paused. Resume with: ${chalk.dim(`topg --resume ${state.sessionId}`)}\n`);
     rl.close();
     process.exit(0);
@@ -325,7 +350,7 @@ export async function startRepl(
       }
       orchestrator = new Orchestrator(claude, codex, session, state.config, callbacks);
       session.updateStatus(targetId, "active");
-      server.broadcast({ type: "sessions.list", sessions: session.listSessions() });
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
       process.stderr.write(`  Switched to session ${chalk.dim(targetId)} (${state.roundIndex} rounds)\n\n`);
     } catch {
       process.stderr.write(chalk.red(`  Session not found: ${targetId}\n\n`));
@@ -358,8 +383,8 @@ export async function startRepl(
       state.lastResult = result;
       state.messages = result.messages;
       state.roundStartTurn = Math.max(...state.messages.map((m) => m.turn), 0) + 1;
-      server.broadcast({ type: "debate.result", sessionId: state.sessionId, result });
-      server.broadcast({ type: "sessions.list", sessions: session.listSessions() });
+      server?.broadcast({ type: "debate.result", sessionId: state.sessionId, result });
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
 
       if (result.type === "consensus") {
         process.stderr.write(chalk.green("✓") + ` Consensus reached (${result.rounds} rounds)\n\n`);
@@ -448,7 +473,11 @@ export async function startRepl(
   });
 
   commands.set("dashboard", () => {
-    process.stderr.write(`\n  ${chalk.cyan(dashboardUrl)}\n\n`);
+    if (dashboardUrl) {
+      process.stderr.write(`\n  ${chalk.cyan(dashboardUrl)}\n\n`);
+    } else {
+      process.stderr.write(chalk.dim("  Dashboard is not running.\n\n"));
+    }
   });
 
   // --- Debate submission ---
@@ -470,7 +499,7 @@ export async function startRepl(
 
     if (state.roundIndex === 1) {
       session.updatePrompt(state.sessionId, prompt);
-      server.broadcast({ type: "sessions.list", sessions: session.listSessions() });
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
     }
 
     state.debateInProgress = true;
@@ -480,7 +509,7 @@ export async function startRepl(
       1,
       state.config.guardrailRounds
     );
-    if (!dashboardHintShown) {
+    if (!dashboardHintShown && dashboardUrl) {
       process.stderr.write(`\n  ${chalk.dim('Watch the debate live at')} ${chalk.cyan(dashboardUrl)}\n\n`);
       dashboardHintShown = true;
     }
@@ -497,8 +526,8 @@ export async function startRepl(
       state.lastResult = result;
       state.messages = result.messages;
       state.roundStartTurn = Math.max(...state.messages.map((m) => m.turn), 0) + 1;
-      server.broadcast({ type: "debate.result", sessionId: state.sessionId, result });
-      server.broadcast({ type: "sessions.list", sessions: session.listSessions() });
+      server?.broadcast({ type: "debate.result", sessionId: state.sessionId, result });
+      server?.broadcast({ type: "sessions.list", sessions: session.listSessions() });
 
       if (result.type === "consensus") {
         process.stderr.write(chalk.green("✓") + ` Consensus reached (${result.rounds} rounds)\n\n`);
@@ -527,7 +556,7 @@ export async function startRepl(
       abortController.abort();
     } else {
       session.updateStatus(state.sessionId, "paused");
-      server.close();
+      closeServer();
       process.stderr.write(`\n\nSession paused. Resume with: ${chalk.dim(`topg --resume ${state.sessionId}`)}\n`);
       process.exit(0);
     }
@@ -560,7 +589,7 @@ export async function startRepl(
 
   // EOF / readline close
   session.updateStatus(state.sessionId, "paused");
-  server.close();
+  closeServer();
   process.stderr.write(`\nSession paused. Resume with: ${chalk.dim(`topg --resume ${state.sessionId}`)}\n`);
 }
 
