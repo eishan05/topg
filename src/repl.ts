@@ -128,7 +128,7 @@ export async function startRepl(
     }
   };
 
-  let orchestrator = new Orchestrator(claude, codex, session, config, onTurnStart);
+  let orchestrator = new Orchestrator(claude, codex, session, config, { onTurnStart });
 
   // Load or create session
   if (resumeSessionId) {
@@ -137,7 +137,7 @@ export async function startRepl(
     state.messages = loaded.messages;
     state.roundStartTurn = Math.max(...loaded.messages.map((m) => m.turn), 0) + 1;
     state.config = { ...config, ...loaded.meta.config };
-    orchestrator = new Orchestrator(claude, codex, session, state.config, onTurnStart);
+    orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
     session.updateStatus(resumeSessionId, "active");
   } else {
     const meta = session.create("(interactive session)", config);
@@ -265,7 +265,7 @@ export async function startRepl(
       state.lastResult = null;
       state.escalationPending = false;
       Object.assign(state.config, loaded.meta.config);
-      orchestrator = new Orchestrator(claude, codex, session, state.config, onTurnStart);
+      orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
       session.updateStatus(targetId, "active");
       process.stderr.write(`  Switched to session ${chalk.dim(targetId)} (${state.roundIndex} rounds)\n\n`);
     } catch {
@@ -335,7 +335,7 @@ export async function startRepl(
     const [key, value] = parts;
     if (key === "startWith" && (value === "claude" || value === "codex")) {
       state.config.startWith = value;
-      orchestrator = new Orchestrator(claude, codex, session, state.config, onTurnStart);
+      orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
       process.stderr.write(chalk.dim(`  startWith set to ${value}\n\n`));
     } else if (key === "guardrailRounds" && !isNaN(parseInt(value, 10))) {
       state.config.guardrailRounds = parseInt(value, 10);

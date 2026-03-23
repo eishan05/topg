@@ -6,6 +6,12 @@ import { formatConsensus, formatEscalation } from "./formatter.js";
 import { SessionManager } from "./session.js";
 
 export type TurnCallback = (turn: number, agent: AgentName, role: string) => void;
+export type TurnCompleteCallback = (message: Message) => void;
+
+export interface OrchestratorCallbacks {
+  onTurnStart?: TurnCallback;
+  onTurnComplete?: TurnCompleteCallback;
+}
 
 export class Orchestrator {
   private agentA: AgentAdapter;
@@ -13,19 +19,21 @@ export class Orchestrator {
   private session: SessionManager;
   private config: OrchestratorConfig;
   private onTurnStart?: TurnCallback;
+  private onTurnComplete?: TurnCompleteCallback;
 
   constructor(
     agentA: AgentAdapter,
     agentB: AgentAdapter,
     session: SessionManager,
     config: OrchestratorConfig,
-    onTurnStart?: TurnCallback
+    callbacks?: OrchestratorCallbacks
   ) {
     this.agentA = config.startWith === agentA.name ? agentA : agentB;
     this.agentB = config.startWith === agentA.name ? agentB : agentA;
     this.config = config;
     this.session = session;
-    this.onTurnStart = onTurnStart;
+    this.onTurnStart = callbacks?.onTurnStart;
+    this.onTurnComplete = callbacks?.onTurnComplete;
   }
 
   async run(userPrompt: string): Promise<OrchestratorResult> {
@@ -49,6 +57,7 @@ export class Orchestrator {
     const initMsg = this.toMessage("initiator", this.agentA.name, turn, "code", initResponse);
     messages.push(initMsg);
     this.session.appendMessage(meta.sessionId, initMsg);
+    this.onTurnComplete?.(initMsg);
 
     // Turn 2+: Review loop
     let currentReviewer = this.agentB;
@@ -83,6 +92,7 @@ export class Orchestrator {
       );
       messages.push(reviewMsg);
       this.session.appendMessage(meta.sessionId, reviewMsg);
+      this.onTurnComplete?.(reviewMsg);
 
       // Check convergence
       if (detectConvergence(messages) || checkDiffStability(messages)) {
@@ -113,6 +123,7 @@ export class Orchestrator {
     const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escResponseA);
     messages.push(escMsgA);
     this.session.appendMessage(meta.sessionId, escMsgA);
+    this.onTurnComplete?.(escMsgA);
 
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
     const escResponseB = await this.agentB.send(
@@ -127,6 +138,7 @@ export class Orchestrator {
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escResponseB);
     messages.push(escMsgB);
     this.session.appendMessage(meta.sessionId, escMsgB);
+    this.onTurnComplete?.(escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), this.config.guardrailRounds);
     this.session.saveSummary(meta.sessionId, summary);
@@ -160,6 +172,7 @@ export class Orchestrator {
     const initMsg = this.toMessage("initiator", this.agentA.name, turn, "code", initResponse);
     messages.push(initMsg);
     this.session.appendMessage(sessionId, initMsg);
+    this.onTurnComplete?.(initMsg);
 
     // Review loop
     let currentReviewer = this.agentB;
@@ -189,6 +202,7 @@ export class Orchestrator {
       const reviewMsg = this.toMessage("reviewer", currentReviewer.name, turn, "review", reviewResponse);
       messages.push(reviewMsg);
       this.session.appendMessage(sessionId, reviewMsg);
+      this.onTurnComplete?.(reviewMsg);
 
       if (detectConvergence(messages) || checkDiffStability(messages)) {
         const summary = formatConsensus(messages, turn);
@@ -213,6 +227,7 @@ export class Orchestrator {
     const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
     messages.push(escMsgA);
     this.session.appendMessage(sessionId, escMsgA);
+    this.onTurnComplete?.(escMsgA);
 
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
     const escB = await this.agentB.send(
@@ -223,6 +238,7 @@ export class Orchestrator {
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escB);
     messages.push(escMsgB);
     this.session.appendMessage(sessionId, escMsgB);
+    this.onTurnComplete?.(escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), turn);
     this.session.saveSummary(sessionId, summary);
@@ -281,6 +297,7 @@ export class Orchestrator {
       const reviewMsg = this.toMessage("reviewer", currentReviewer.name, turn, "review", reviewResponse);
       messages.push(reviewMsg);
       this.session.appendMessage(sessionId, reviewMsg);
+      this.onTurnComplete?.(reviewMsg);
 
       if (detectConvergence(messages) || checkDiffStability(messages)) {
         const summary = formatConsensus(messages, turn);
@@ -304,6 +321,7 @@ export class Orchestrator {
     const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
     messages.push(escMsgA);
     this.session.appendMessage(sessionId, escMsgA);
+    this.onTurnComplete?.(escMsgA);
 
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
     const escB = await this.agentB.send(
@@ -313,6 +331,7 @@ export class Orchestrator {
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escB);
     messages.push(escMsgB);
     this.session.appendMessage(sessionId, escMsgB);
+    this.onTurnComplete?.(escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), turn);
     this.session.saveSummary(sessionId, summary);
@@ -341,6 +360,7 @@ export class Orchestrator {
     };
     messages.push(guidanceMsg);
     this.session.appendMessage(sessionId, guidanceMsg);
+    this.onTurnComplete?.(guidanceMsg);
     this.session.updateStatus(sessionId, "active");
 
     // Agent A responds to user guidance
@@ -359,6 +379,7 @@ export class Orchestrator {
     const msgA = this.toMessage("initiator", this.agentA.name, turn, "review", responseA);
     messages.push(msgA);
     this.session.appendMessage(sessionId, msgA);
+    this.onTurnComplete?.(msgA);
 
     // Review loop (same as main run)
     let currentReviewer = this.agentB;
@@ -382,6 +403,7 @@ export class Orchestrator {
       const reviewMsg = this.toMessage("reviewer", currentReviewer.name, turn, "review", reviewResponse);
       messages.push(reviewMsg);
       this.session.appendMessage(sessionId, reviewMsg);
+      this.onTurnComplete?.(reviewMsg);
 
       if (detectConvergence(messages) || checkDiffStability(messages)) {
         const summary = formatConsensus(messages, turn);
@@ -406,6 +428,7 @@ export class Orchestrator {
     const escMsgA = this.toMessage("initiator", this.agentA.name, turn, "deadlock", escA);
     messages.push(escMsgA);
     this.session.appendMessage(sessionId, escMsgA);
+    this.onTurnComplete?.(escMsgA);
 
     this.onTurnStart?.(turn, this.agentB.name, "escalation");
     const escB = await this.agentB.send(
@@ -416,6 +439,7 @@ export class Orchestrator {
     const escMsgB = this.toMessage("reviewer", this.agentB.name, turn, "deadlock", escB);
     messages.push(escMsgB);
     this.session.appendMessage(sessionId, escMsgB);
+    this.onTurnComplete?.(escMsgB);
 
     const summary = formatEscalation(messages.slice(-2), turn);
     this.session.saveSummary(sessionId, summary);

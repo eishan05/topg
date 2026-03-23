@@ -69,9 +69,11 @@ program
     const codex = new CodexAdapter(config.timeoutMs);
     const session = new SessionManager();
 
-    const orchestrator = new Orchestrator(claude, codex, session, config, (turn, agent, role) => {
-      const label = agent.charAt(0).toUpperCase() + agent.slice(1);
-      console.error(`[Turn ${turn}] ${label} (${role}): responding...`);
+    const orchestrator = new Orchestrator(claude, codex, session, config, {
+      onTurnStart: (turn, agent, role) => {
+        const label = agent.charAt(0).toUpperCase() + agent.slice(1);
+        console.error(`[Turn ${turn}] ${label} (${role}): responding...`);
+      },
     });
 
     try {
