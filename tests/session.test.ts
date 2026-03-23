@@ -118,6 +118,11 @@ describe("SessionManager", () => {
     expect(loaded.meta.prompt).toBe("Should we use React?");
   });
 
+  it("should reject path traversal in session IDs", () => {
+    expect(() => manager.deleteSession("../../etc")).toThrow("Invalid session ID");
+    expect(() => manager.load("../../../foo")).toThrow("Invalid session ID");
+  });
+
   it("should delete an existing session", () => {
     const session = manager.create("Delete me", defaultConfig);
     const dir = path.join(tmpDir, session.sessionId);

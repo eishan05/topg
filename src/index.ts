@@ -113,6 +113,15 @@ program
       return;
     }
 
+    // Warn when active/paused sessions would be deleted without an explicit status filter
+    if (!opts.all && !opts.completed && !opts.escalated) {
+      const resumable = sessions.filter((s) => s.status === "active" || s.status === "paused");
+      if (resumable.length > 0) {
+        console.error(`Warning: ${resumable.length} active/paused session${resumable.length === 1 ? "" : "s"} will be deleted.`);
+        console.error("Use --completed or --escalated to target only finished sessions.");
+      }
+    }
+
     // Show confirmation unless --force
     if (!opts.force) {
       const statusCounts = new Map<string, number>();

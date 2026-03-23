@@ -10,6 +10,9 @@ export function parseDuration(input: string): number {
     throw new Error(`Invalid duration "${input}". Use format: <number><d|w|m> (e.g., 7d, 2w, 1m)`);
   }
   const value = parseInt(match[1], 10);
+  if (value === 0) {
+    throw new Error(`Duration must be greater than zero: "${input}"`);
+  }
   const unit = match[2];
   const MS_PER_DAY = 86400000;
   switch (unit) {

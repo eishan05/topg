@@ -20,7 +20,12 @@ export class SessionManager {
   }
 
   private sessionDir(sessionId: string): string {
-    return path.join(this.baseDir, sessionId);
+    const dir = path.join(this.baseDir, sessionId);
+    const resolved = path.resolve(dir);
+    if (!resolved.startsWith(path.resolve(this.baseDir) + path.sep)) {
+      throw new Error(`Invalid session ID: ${sessionId}`);
+    }
+    return resolved;
   }
 
   create(prompt: string, config: OrchestratorConfig): SessionMeta {

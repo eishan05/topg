@@ -29,4 +29,10 @@ describe("parseDuration", () => {
   it("should throw for empty string", () => {
     expect(() => parseDuration("")).toThrow('Invalid duration ""');
   });
+
+  it("should throw for zero duration", () => {
+    expect(() => parseDuration("0d")).toThrow("Duration must be greater than zero");
+    expect(() => parseDuration("0w")).toThrow("Duration must be greater than zero");
+    expect(() => parseDuration("0m")).toThrow("Duration must be greater than zero");
+  });
 });
