@@ -371,4 +371,47 @@ describe("runWithHistory", () => {
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  it("should not allow soft consensus on first review of a new segment", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "topg-hist-"));
+    const session = new SessionManager(tmpDir);
+
+    // Existing messages at turns 1-5 (simulating a prior debate)
+    const existingMessages: Message[] = [
+      { role: "initiator", agent: "claude", turn: 1, type: "code", content: "Initial proposal.", timestamp: new Date().toISOString() },
+      { role: "reviewer", agent: "codex", turn: 2, type: "review", content: "Review 1.", timestamp: new Date().toISOString() },
+      { role: "reviewer", agent: "claude", turn: 3, type: "review", content: "Rebuttal 1.", timestamp: new Date().toISOString() },
+      { role: "reviewer", agent: "codex", turn: 4, type: "review", content: "Review 2.", timestamp: new Date().toISOString() },
+      { role: "reviewer", agent: "claude", turn: 5, type: "review", content: "Rebuttal 2.", timestamp: new Date().toISOString() },
+    ];
+
+    // Claude proposes (turn 6), codex signals partial (turn 7) — should NOT converge
+    // because this is only the first review in the new segment
+    const claude = createMockAdapter("claude", [
+      { content: "New proposal.\n[CONVERGENCE: agree]", convergenceSignal: "agree" },
+      { content: "Updated proposal.\n[CONVERGENCE: agree]", convergenceSignal: "agree" },
+      { content: "Final proposal.\n[CONVERGENCE: agree]", convergenceSignal: "agree" },
+      { content: "Escalation summary.\n[CONVERGENCE: disagree]", convergenceSignal: "disagree" },
+    ]);
+    const codex = createMockAdapter("codex", [
+      { content: "Mostly good but have concerns.\n[CONVERGENCE: partial]", convergenceSignal: "partial" },
+      { content: "Still partial.\n[CONVERGENCE: partial]", convergenceSignal: "partial" },
+      { content: "Still partial.\n[CONVERGENCE: partial]", convergenceSignal: "partial" },
+      { content: "Escalation summary.\n[CONVERGENCE: disagree]", convergenceSignal: "disagree" },
+    ]);
+
+    // guardrailRounds: 4 → 4 review rounds in the new segment before escalation
+    // Soft consensus (agree+partial) should not fire until segmentRound > 3
+    const config = { ...defaultConfig, guardrailRounds: 4 };
+    const orch = new Orchestrator(claude, codex, session, config);
+    const meta = session.create("test prompt", config);
+
+    const result = await orch.runWithHistory("Follow-up question", existingMessages, meta.sessionId);
+
+    // Should NOT have converged on the first review (absolute turn 7) despite turn > 3,
+    // because segment-relative turn is only 1
+    expect(result.rounds).toBeGreaterThan(7);
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
 });

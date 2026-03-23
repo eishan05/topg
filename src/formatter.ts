@@ -1,6 +1,11 @@
 import type { Message, Artifact, ToolActivity } from "./types.js";
 import { capitalize } from "./utils.js";
 
+/** Strip structured claim bookkeeping sections from agent output before user-facing display. */
+function stripClaimSections(content: string): string {
+  return content.replace(/\n## (?:Accepted Points|Contested Points|New Claims|Withdrawn)\b[\s\S]*/g, "");
+}
+
 export function formatConsensus(messages: Message[], rounds: number): string {
   const lastMessages = getLastMessagePerAgent(messages);
   const allArtifacts = collectArtifacts(messages);
@@ -13,7 +18,7 @@ export function formatConsensus(messages: Message[], rounds: number): string {
   // The initiator typically has the actual deliverable content while the reviewer
   // often just comments on it (e.g. "Your plan is solid...").
   const finalMsg = findBestConsensusMessage(agentMessages) ?? agentMessages[agentMessages.length - 1];
-  output += finalMsg.content.replace(/\[CONVERGENCE:.*?\]/gi, "").trim();
+  output += stripClaimSections(finalMsg.content).replace(/\[CONVERGENCE:.*?\]/gi, "").trim();
   output += "\n\n";
 
   if (lastMessages.length > 1) {
@@ -47,7 +52,7 @@ export function formatEscalation(messages: Message[], rounds: number): string {
 
   for (const msg of lastMessages) {
     output += `### ${capitalize(msg.agent)}'s Summary\n\n`;
-    output += msg.content.replace(/\[CONVERGENCE:.*?\]/gi, "").trim();
+    output += stripClaimSections(msg.content).replace(/\[CONVERGENCE:.*?\]/gi, "").trim();
     output += "\n\n";
   }
 
@@ -113,7 +118,7 @@ function collectArtifacts(messages: Message[]): Artifact[] {
 }
 
 function firstSentence(s: string): string {
-  const clean = s.replace(/\[CONVERGENCE:.*?\]/gi, "").trim();
+  const clean = stripClaimSections(s).replace(/\[CONVERGENCE:.*?\]/gi, "").trim();
   const match = clean.match(/^(.+?[.!?])\s/);
   return match ? match[1] : clean.slice(0, 120);
 }
