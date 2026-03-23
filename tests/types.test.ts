@@ -28,6 +28,12 @@ describe("types", () => {
         guardrailRounds: 8,
         timeoutMs: 120000,
         outputFormat: "text",
+        codex: {
+          sandboxMode: "workspace-write",
+          webSearchMode: "live",
+          networkAccessEnabled: true,
+          approvalPolicy: "never",
+        },
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

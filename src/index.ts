@@ -8,7 +8,7 @@ import { CodexAdapter } from "./adapters/codex-adapter.js";
 import { SessionManager } from "./session.js";
 import { startRepl } from "./repl.js";
 import { createTopgServer } from "./server.js";
-import type { AgentName, OrchestratorConfig } from "./types.js";
+import type { AgentName, CodexConfig, OrchestratorConfig } from "./types.js";
 
 function askUser(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stderr });
@@ -62,6 +62,12 @@ program
   .option("--output <format>", "Output format (text or json)", "text")
   .option("--transcript <path>", "Save full transcript to path")
   .option("--resume <sessionId>", "Resume a paused session")
+  .option("--codex-sandbox <mode>", "Codex sandbox mode (read-only, workspace-write, danger-full-access)", "workspace-write")
+  .option("--codex-web-search <mode>", "Codex web search (disabled, cached, live)", "live")
+  .option("--codex-network", "Enable network access for Codex", true)
+  .option("--no-codex-network", "Disable network access for Codex")
+  .option("--codex-model <model>", "Override model for Codex agent")
+  .option("--codex-reasoning <effort>", "Codex reasoning effort (minimal, low, medium, high, xhigh)")
   .action(async (prompt: string | undefined, opts) => {
     // Validate credentials
     if (!process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_API_KEY) {
@@ -73,12 +79,22 @@ program
       process.exit(1);
     }
 
+    const codexCfg: CodexConfig = {
+      sandboxMode: opts.codexSandbox as CodexConfig["sandboxMode"],
+      webSearchMode: opts.codexWebSearch as CodexConfig["webSearchMode"],
+      networkAccessEnabled: !!opts.codexNetwork,
+      approvalPolicy: "never",
+      model: opts.codexModel,
+      modelReasoningEffort: opts.codexReasoning as CodexConfig["modelReasoningEffort"],
+    };
+
     const config: OrchestratorConfig = {
       startWith: opts.startWith as AgentName,
       workingDirectory: opts.cwd,
       guardrailRounds: parseInt(opts.guardrail, 10),
       timeoutMs: parseInt(opts.timeout, 10) * 1000,
       outputFormat: opts.output as "text" | "json",
+      codex: codexCfg,
     };
 
     // Case 1: No prompt and no --resume → launch REPL
@@ -95,8 +111,21 @@ program
 
     // Case 3 & 4: One-shot mode (existing behavior)
     const claude = new ClaudeAdapter(config.timeoutMs);
-    const codex = new CodexAdapter(config.timeoutMs);
+    const codex = new CodexAdapter(config.timeoutMs, config.codex);
     const session = new SessionManager();
+
+    // When resuming, restore the session's stored Codex config
+    if (opts.resume) {
+      try {
+        const loaded = session.load(opts.resume as string);
+        if (loaded.meta.config.codex) {
+          codex.updateConfig(loaded.meta.config.codex);
+        }
+      } catch (err) {
+        console.error(`Failed to load session: ${(err as Error).message}`);
+        process.exit(1);
+      }
+    }
 
     const orchestrator = new Orchestrator(claude, codex, session, config, {
       onTurnStart: (turn, agent, role) => {

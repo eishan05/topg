@@ -25,6 +25,12 @@ const defaultConfig: OrchestratorConfig = {
   guardrailRounds: 8,
   timeoutMs: 120000,
   outputFormat: "text",
+  codex: {
+    sandboxMode: "workspace-write",
+    webSearchMode: "live",
+    networkAccessEnabled: true,
+    approvalPolicy: "never",
+  },
 };
 
 describe("Orchestrator", () => {

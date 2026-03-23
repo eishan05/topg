@@ -140,7 +140,7 @@ export class Orchestrator {
     this.session.appendMessage(meta.sessionId, escMsgB);
     this.onTurnComplete?.(escMsgB);
 
-    const summary = formatEscalation(messages.slice(-2), this.config.guardrailRounds);
+    const summary = formatEscalation(messages, this.config.guardrailRounds);
     this.session.saveSummary(meta.sessionId, summary);
     this.session.updateStatus(meta.sessionId, "escalated");
     return { type: "escalation", sessionId: meta.sessionId, rounds: this.config.guardrailRounds, summary, messages };
@@ -240,7 +240,7 @@ export class Orchestrator {
     this.session.appendMessage(sessionId, escMsgB);
     this.onTurnComplete?.(escMsgB);
 
-    const summary = formatEscalation(messages.slice(-2), turn);
+    const summary = formatEscalation(messages, turn);
     this.session.saveSummary(sessionId, summary);
     this.session.updateStatus(sessionId, "escalated");
     return { type: "escalation", sessionId, rounds: turn, summary, messages };
@@ -333,7 +333,7 @@ export class Orchestrator {
     this.session.appendMessage(sessionId, escMsgB);
     this.onTurnComplete?.(escMsgB);
 
-    const summary = formatEscalation(messages.slice(-2), turn);
+    const summary = formatEscalation(messages, turn);
     this.session.saveSummary(sessionId, summary);
     this.session.updateStatus(sessionId, "escalated");
     return { type: "escalation", sessionId, rounds: turn, summary, messages };
@@ -441,7 +441,7 @@ export class Orchestrator {
     this.session.appendMessage(sessionId, escMsgB);
     this.onTurnComplete?.(escMsgB);
 
-    const summary = formatEscalation(messages.slice(-2), turn);
+    const summary = formatEscalation(messages, turn);
     this.session.saveSummary(sessionId, summary);
     this.session.updateStatus(sessionId, "escalated");
     return { type: "escalation", sessionId, rounds: turn, summary, messages };
@@ -452,7 +452,7 @@ export class Orchestrator {
     agent: AgentName,
     turn: number,
     type: Message["type"],
-    response: { content: string; artifacts?: any[]; convergenceSignal?: any }
+    response: { content: string; artifacts?: any[]; toolActivities?: any[]; convergenceSignal?: any }
   ): Message {
     return {
       role,
@@ -461,6 +461,7 @@ export class Orchestrator {
       type,
       content: response.content,
       artifacts: response.artifacts,
+      toolActivities: response.toolActivities,
       convergenceSignal: response.convergenceSignal,
       timestamp: new Date().toISOString(),
     };

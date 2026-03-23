@@ -4,7 +4,7 @@ import { ClaudeAdapter } from "./adapters/claude-adapter.js";
 import { CodexAdapter } from "./adapters/codex-adapter.js";
 import { Orchestrator } from "./orchestrator.js";
 import { SessionManager } from "./session.js";
-import type { Message, OrchestratorConfig, OrchestratorResult } from "./types.js";
+import type { CodexConfig, Message, OrchestratorConfig, OrchestratorResult } from "./types.js";
 
 // --- Command parsing ---
 
@@ -98,7 +98,7 @@ export async function startRepl(
 ): Promise<void> {
   const session = new SessionManager();
   const claude = new ClaudeAdapter(config.timeoutMs);
-  const codex = new CodexAdapter(config.timeoutMs);
+  const codex = new CodexAdapter(config.timeoutMs, config.codex);
 
   const spinner = createSpinner((text) => process.stderr.write(text));
 
@@ -137,6 +137,7 @@ export async function startRepl(
     state.messages = loaded.messages;
     state.roundStartTurn = Math.max(...loaded.messages.map((m) => m.turn), 0) + 1;
     state.config = { ...config, ...loaded.meta.config };
+    codex.updateConfig(state.config.codex);
     orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
     session.updateStatus(resumeSessionId, "active");
   } else {
@@ -148,6 +149,14 @@ export async function startRepl(
   process.stderr.write(`\n${chalk.bold("topg")} — inter-agent collaboration\n`);
   process.stderr.write(`Session: ${chalk.dim(state.sessionId)}\n`);
   process.stderr.write(`Agents: ${chalk.magenta("Claude")} vs ${chalk.green("Codex")} (${state.config.startWith} goes first)\n`);
+  const cx = state.config.codex;
+  const capabilities: string[] = [];
+  if (cx.sandboxMode !== "read-only") capabilities.push(`sandbox:${cx.sandboxMode}`);
+  if (cx.webSearchMode !== "disabled") capabilities.push(`web:${cx.webSearchMode}`);
+  if (cx.networkAccessEnabled) capabilities.push("network");
+  if (capabilities.length > 0) {
+    process.stderr.write(`Codex: ${chalk.dim(capabilities.join(", "))}\n`);
+  }
   process.stderr.write(`Type a prompt to start a debate, or ${chalk.dim("/help")} for commands.\n\n`);
 
   // Readline
@@ -265,6 +274,7 @@ export async function startRepl(
       state.lastResult = null;
       state.escalationPending = false;
       Object.assign(state.config, loaded.meta.config);
+      codex.updateConfig(state.config.codex);
       orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
       session.updateStatus(targetId, "active");
       process.stderr.write(`  Switched to session ${chalk.dim(targetId)} (${state.roundIndex} rounds)\n\n`);
@@ -322,17 +332,29 @@ export async function startRepl(
   commands.set("config", (args) => {
     const parts = args.trim().split(/\s+/);
     if (!args.trim()) {
+      const cx = state.config.codex;
       process.stderr.write(chalk.dim([
         "",
-        `  startWith:       ${state.config.startWith}`,
-        `  guardrailRounds: ${state.config.guardrailRounds}`,
-        `  timeoutMs:       ${state.config.timeoutMs}`,
-        `  outputFormat:    ${state.config.outputFormat}`,
+        "  General:",
+        `    startWith:       ${state.config.startWith}`,
+        `    guardrailRounds: ${state.config.guardrailRounds}`,
+        `    timeoutMs:       ${state.config.timeoutMs}`,
+        `    outputFormat:    ${state.config.outputFormat}`,
+        "",
+        "  Codex:",
+        `    codex.sandbox:    ${cx.sandboxMode}`,
+        `    codex.webSearch:  ${cx.webSearchMode}`,
+        `    codex.network:    ${cx.networkAccessEnabled}`,
+        `    codex.model:      ${cx.model ?? "(default)"}`,
+        `    codex.reasoning:  ${cx.modelReasoningEffort ?? "(default)"}`,
+        `    codex.approval:   ${cx.approvalPolicy}`,
         "",
       ].join("\n")) + "\n");
       return;
     }
     const [key, value] = parts;
+
+    // General config
     if (key === "startWith" && (value === "claude" || value === "codex")) {
       state.config.startWith = value;
       orchestrator = new Orchestrator(claude, codex, session, state.config, { onTurnStart });
@@ -343,6 +365,32 @@ export async function startRepl(
     } else if (key === "timeoutMs" && !isNaN(parseInt(value, 10))) {
       state.config.timeoutMs = parseInt(value, 10);
       process.stderr.write(chalk.dim(`  timeoutMs set to ${value}\n\n`));
+
+    // Codex config
+    } else if (key === "codex.sandbox" && ["read-only", "workspace-write", "danger-full-access"].includes(value)) {
+      state.config.codex.sandboxMode = value as CodexConfig["sandboxMode"];
+      codex.updateConfig({ sandboxMode: state.config.codex.sandboxMode });
+      process.stderr.write(chalk.dim(`  codex.sandbox set to ${value}\n\n`));
+    } else if (key === "codex.webSearch" && ["disabled", "cached", "live"].includes(value)) {
+      state.config.codex.webSearchMode = value as CodexConfig["webSearchMode"];
+      codex.updateConfig({ webSearchMode: state.config.codex.webSearchMode });
+      process.stderr.write(chalk.dim(`  codex.webSearch set to ${value}\n\n`));
+    } else if (key === "codex.network" && (value === "true" || value === "false")) {
+      state.config.codex.networkAccessEnabled = value === "true";
+      codex.updateConfig({ networkAccessEnabled: state.config.codex.networkAccessEnabled });
+      process.stderr.write(chalk.dim(`  codex.network set to ${value}\n\n`));
+    } else if (key === "codex.model") {
+      state.config.codex.model = value || undefined;
+      codex.updateConfig({ model: state.config.codex.model });
+      process.stderr.write(chalk.dim(`  codex.model set to ${value || "(default)"}\n\n`));
+    } else if (key === "codex.reasoning" && ["minimal", "low", "medium", "high", "xhigh"].includes(value)) {
+      state.config.codex.modelReasoningEffort = value as CodexConfig["modelReasoningEffort"];
+      codex.updateConfig({ modelReasoningEffort: state.config.codex.modelReasoningEffort });
+      process.stderr.write(chalk.dim(`  codex.reasoning set to ${value}\n\n`));
+    } else if (key === "codex.approval" && ["never", "on-request", "on-failure", "untrusted"].includes(value)) {
+      state.config.codex.approvalPolicy = value as CodexConfig["approvalPolicy"];
+      codex.updateConfig({ approvalPolicy: state.config.codex.approvalPolicy });
+      process.stderr.write(chalk.dim(`  codex.approval set to ${value}\n\n`));
     } else {
       process.stderr.write(chalk.dim(`  Unknown config key or invalid value: ${key} ${value ?? ""}\n\n`));
     }

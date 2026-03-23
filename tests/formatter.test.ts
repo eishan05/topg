@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { formatConsensus, formatEscalation } from "../src/formatter.js";
-import type { Message, Artifact } from "../src/types.js";
+import type { Message, Artifact, ToolActivity } from "../src/types.js";
 
 describe("formatConsensus", () => {
   it("should format a consensus result", () => {
@@ -82,6 +82,66 @@ describe("formatEscalation", () => {
     expect(output).toContain("[ESCALATION after 8 rounds");
     expect(output).toContain("Claude");
     expect(output).toContain("Codex");
+  });
+});
+
+describe("formatConsensus with tool activities", () => {
+  it("should include tool activity section when messages have tool activities", () => {
+    const messages: Message[] = [
+      {
+        role: "initiator",
+        agent: "claude",
+        turn: 1,
+        type: "code",
+        content: "Here is my implementation.",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        role: "reviewer",
+        agent: "codex",
+        turn: 2,
+        type: "review",
+        content: "Looks good after checking.\n[CONVERGENCE: agree]",
+        convergenceSignal: "agree",
+        toolActivities: [
+          { type: "command_execution", command: "cat src/app.ts", output: "contents", exitCode: 0 },
+          { type: "file_change", changes: [{ path: "src/fix.ts", kind: "update" }] },
+          { type: "web_search", query: "react best practices 2026" },
+        ],
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const output = formatConsensus(messages, 2);
+    expect(output).toContain("## Tool Activity");
+    expect(output).toContain("cat src/app.ts");
+    expect(output).toContain("src/fix.ts");
+    expect(output).toContain("react best practices 2026");
+  });
+
+  it("should not include tool activity section when no activities", () => {
+    const messages: Message[] = [
+      {
+        role: "initiator",
+        agent: "claude",
+        turn: 1,
+        type: "code",
+        content: "Use React.",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        role: "reviewer",
+        agent: "codex",
+        turn: 2,
+        type: "review",
+        content: "Agreed.\n[CONVERGENCE: agree]",
+        convergenceSignal: "agree",
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const output = formatConsensus(messages, 2);
+    expect(output).not.toContain("## Tool Activity");
   });
 });
 

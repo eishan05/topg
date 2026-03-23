@@ -26,6 +26,12 @@ describe("Full collaboration loop", () => {
     guardrailRounds: 6,
     timeoutMs: 120000,
     outputFormat: "text",
+    codex: {
+      sandboxMode: "workspace-write",
+      webSearchMode: "live",
+      networkAccessEnabled: true,
+      approvalPolicy: "never",
+    },
   };
 
   it("should run a full debate that converges via soft consensus (agree + partial)", async () => {
