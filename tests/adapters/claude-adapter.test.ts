@@ -39,11 +39,13 @@ describe("ClaudeAdapter", () => {
   });
 
   it("should send a prompt and parse the response", async () => {
-    const responseJson = JSON.stringify({
-      type: "result",
-      result: "Here is my review.\n[CONVERGENCE: agree]",
-    });
-    vi.mocked(spawn).mockReturnValue(mockProcess(responseJson));
+    // stream-json format: NDJSON with content_block_delta and result events
+    const lines = [
+      JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Here is my review.\n" } }),
+      JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "[CONVERGENCE: agree]" } }),
+      JSON.stringify({ type: "result", subtype: "success", result: "Here is my review.\n[CONVERGENCE: agree]" }),
+    ].join("\n") + "\n";
+    vi.mocked(spawn).mockReturnValue(mockProcess(lines));
 
     const adapter = new ClaudeAdapter();
     const result = await adapter.send("Review this code", ctx);

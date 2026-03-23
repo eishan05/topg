@@ -13,6 +13,11 @@
     currentMeta: null,     // SessionMeta
     ws: null,              // WebSocket
     reconnectDelay: 1000,
+    streamingContent: "",  // accumulated raw text for the current streaming turn
+    streamingEl: null,     // DOM element for the in-progress streaming message
+    streamingAgent: null,  // agent name for the current streaming turn
+    streamingTurn: null,   // turn number for the current streaming message
+    streamingRole: null,   // role for the current streaming message
   };
 
   // ── DOM refs ───────────────────────────────────────────────────────
@@ -131,6 +136,9 @@
       case "turn.start":
         handleTurnStart(msg);
         break;
+      case "turn.chunk":
+        handleTurnChunk(msg);
+        break;
       case "turn.complete":
         handleTurnComplete(msg);
         break;
@@ -187,6 +195,13 @@
   function handleTurnStart(msg) {
     if (msg.sessionId !== state.currentSessionId) return;
 
+    // Reset streaming state for the new turn
+    state.streamingContent = "";
+    state.streamingEl = null;
+    state.streamingAgent = msg.agent;
+    state.streamingTurn = msg.turn;
+    state.streamingRole = msg.role;
+
     var indicator = $id("typing-indicator");
     var label = $id("typing-label");
     if (indicator) indicator.style.display = "";
@@ -194,6 +209,39 @@
       var agentLabel = msg.agent === "claude" ? "Claude" : "Codex";
       label.textContent = agentLabel + " is thinking...";
     }
+  }
+
+  function handleTurnChunk(msg) {
+    if (msg.sessionId !== state.currentSessionId) return;
+
+    state.streamingContent += msg.content;
+
+    // Hide the typing indicator once content starts arriving
+    var indicator = $id("typing-indicator");
+    if (indicator) indicator.style.display = "none";
+
+    var thread = $id("thread");
+    if (!thread) return;
+
+    // Create the streaming message element on first chunk
+    if (!state.streamingEl) {
+      state.streamingEl = renderMessage({
+        agent: state.streamingAgent || msg.agent,
+        role: state.streamingRole || "initiator",
+        turn: state.streamingTurn || 0,
+        content: state.streamingContent,
+      });
+      state.streamingEl.classList.add("streaming");
+      thread.appendChild(state.streamingEl);
+    } else {
+      // Update the content area of the existing streaming element
+      var contentEl = state.streamingEl.querySelector(".message-content");
+      if (contentEl) {
+        contentEl.innerHTML = parseContent(state.streamingContent);
+      }
+    }
+
+    thread.scrollTop = thread.scrollHeight;
   }
 
   function handleTurnComplete(msg) {
@@ -209,9 +257,23 @@
       state.currentMessages.push(message);
       var thread = $id("thread");
       if (thread) {
-        thread.appendChild(renderMessage(message));
+        // Replace the streaming placeholder with the final message
+        if (state.streamingEl && state.streamingEl.parentNode === thread) {
+          var finalEl = renderMessage(message);
+          thread.replaceChild(finalEl, state.streamingEl);
+        } else {
+          thread.appendChild(renderMessage(message));
+        }
         thread.scrollTop = thread.scrollHeight;
       }
+
+      // Clear streaming state
+      state.streamingContent = "";
+      state.streamingEl = null;
+      state.streamingAgent = null;
+      state.streamingTurn = null;
+      state.streamingRole = null;
+
       updateConvergenceBar();
     }
   }

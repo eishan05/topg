@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { parseConvergenceTag } from "../convergence.js";
-import type { AgentName, AgentResponse, ConversationContext } from "../types.js";
+import type { AgentName, AgentResponse, ConversationContext, StreamChunkCallback } from "../types.js";
 import type { AgentAdapter } from "./agent-adapter.js";
 
 export class ClaudeAdapter implements AgentAdapter {
@@ -13,11 +13,11 @@ export class ClaudeAdapter implements AgentAdapter {
     this.yolo = yolo;
   }
 
-  async send(prompt: string, context: ConversationContext, signal?: AbortSignal): Promise<AgentResponse> {
+  async send(prompt: string, context: ConversationContext, signal?: AbortSignal, onChunk?: StreamChunkCallback): Promise<AgentResponse> {
     const fullPrompt = prompt;
 
     return new Promise((resolve, reject) => {
-      const args = ["-p", fullPrompt, "--output-format", "json"];
+      const args = ["-p", fullPrompt, "--output-format", "stream-json"];
       if (this.yolo) {
         args.push("--dangerously-skip-permissions");
       }
@@ -28,12 +28,37 @@ export class ClaudeAdapter implements AgentAdapter {
         stdio: ["ignore", "pipe", "pipe"],
       });
 
-      let stdout = "";
       let stderr = "";
+      let fullContent = "";
+      let resultContent: string | null = null;
+      let lineBuffer = "";
 
       proc.stdout?.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
+        lineBuffer += chunk.toString();
+
+        // Process complete lines (NDJSON — one JSON object per line)
+        let newlineIdx: number;
+        while ((newlineIdx = lineBuffer.indexOf("\n")) !== -1) {
+          const line = lineBuffer.slice(0, newlineIdx).trim();
+          lineBuffer = lineBuffer.slice(newlineIdx + 1);
+          if (!line) continue;
+
+          try {
+            const event = JSON.parse(line);
+
+            if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+              const text = event.delta.text;
+              fullContent += text;
+              onChunk?.(text);
+            } else if (event.type === "result") {
+              resultContent = event.result ?? null;
+            }
+          } catch {
+            // Skip malformed lines
+          }
+        }
       });
+
       proc.stderr?.on("data", (chunk: Buffer) => {
         stderr += chunk.toString();
       });
@@ -64,21 +89,14 @@ export class ClaudeAdapter implements AgentAdapter {
           reject(new Error(`Claude CLI exited with code ${code}: ${stderr}`));
           return;
         }
-        try {
-          const parsed = JSON.parse(stdout);
-          const content = parsed.result ?? parsed.content ?? stdout;
-          const convergenceSignal = parseConvergenceTag(content);
-          resolve({
-            content,
-            convergenceSignal: convergenceSignal ?? undefined,
-          });
-        } catch {
-          const convergenceSignal = parseConvergenceTag(stdout);
-          resolve({
-            content: stdout,
-            convergenceSignal: convergenceSignal ?? undefined,
-          });
-        }
+
+        // Prefer the result event's content (authoritative), fall back to accumulated deltas
+        const content = resultContent ?? fullContent;
+        const convergenceSignal = parseConvergenceTag(content);
+        resolve({
+          content,
+          convergenceSignal: convergenceSignal ?? undefined,
+        });
       });
     });
   }

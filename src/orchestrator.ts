@@ -1,5 +1,5 @@
 import type { AgentAdapter } from "./adapters/agent-adapter.js";
-import type { Message, OrchestratorConfig, OrchestratorResult, AgentName } from "./types.js";
+import type { Message, OrchestratorConfig, OrchestratorResult, AgentName, StreamChunkCallback } from "./types.js";
 import { detectConvergence, checkDiffStability } from "./convergence.js";
 import { initiatorPrompt, reviewerPrompt, rebuttalPrompt, escalationPrompt, userGuidancePrompt, formatTurnPrompt, synthesisPrompt } from "./prompts.js";
 import { formatConsensus, formatEscalation } from "./formatter.js";
@@ -8,10 +8,12 @@ import { capitalize } from "./utils.js";
 
 export type TurnCallback = (turn: number, agent: AgentName, role: string) => void;
 export type TurnCompleteCallback = (message: Message) => void;
+export type ChunkCallback = (agent: AgentName, chunk: string) => void;
 
 export interface OrchestratorCallbacks {
   onTurnStart?: TurnCallback;
   onTurnComplete?: TurnCompleteCallback;
+  onChunk?: ChunkCallback;
 }
 
 export class Orchestrator {
@@ -21,6 +23,7 @@ export class Orchestrator {
   private config: OrchestratorConfig;
   private onTurnStart?: TurnCallback;
   private onTurnComplete?: TurnCompleteCallback;
+  private onChunk?: ChunkCallback;
 
   constructor(
     agentA: AgentAdapter,
@@ -35,6 +38,12 @@ export class Orchestrator {
     this.session = session;
     this.onTurnStart = callbacks?.onTurnStart;
     this.onTurnComplete = callbacks?.onTurnComplete;
+    this.onChunk = callbacks?.onChunk;
+  }
+
+  /** Create a StreamChunkCallback bound to a specific agent. */
+  private chunkCb(agent: AgentName): StreamChunkCallback | undefined {
+    return this.onChunk ? (chunk: string) => this.onChunk!(agent, chunk) : undefined;
   }
 
   async run(userPrompt: string): Promise<OrchestratorResult> {
@@ -52,7 +61,9 @@ export class Orchestrator {
         history: messages,
         workingDirectory: this.config.workingDirectory,
         systemPrompt: initiatorPrompt(this.agentB.name),
-      }
+      },
+      undefined,
+      this.chunkCb(this.agentA.name)
     );
 
     const initMsg = this.toMessage("initiator", this.agentA.name, turn, "code", initResponse);
@@ -81,7 +92,9 @@ export class Orchestrator {
           history: messages,
           workingDirectory: this.config.workingDirectory,
           systemPrompt: sysPrompt,
-        }
+        },
+        undefined,
+        this.chunkCb(currentReviewer.name)
       );
 
       const reviewMsg = this.toMessage(
@@ -143,7 +156,8 @@ export class Orchestrator {
         workingDirectory: this.config.workingDirectory,
         systemPrompt: initiatorPrompt(this.agentB.name),
       },
-      signal
+      signal,
+      this.chunkCb(this.agentA.name)
     );
 
     const initMsg = this.toMessage("initiator", this.agentA.name, turn, "code", initResponse);
@@ -173,7 +187,8 @@ export class Orchestrator {
           workingDirectory: this.config.workingDirectory,
           systemPrompt: sysPrompt,
         },
-        signal
+        signal,
+        this.chunkCb(currentReviewer.name)
       );
 
       const reviewMsg = this.toMessage("reviewer", currentReviewer.name, turn, "review", reviewResponse);
@@ -252,7 +267,9 @@ export class Orchestrator {
           history: messages,
           workingDirectory: this.config.workingDirectory,
           systemPrompt: rebuttalPrompt(currentInitiator.name),
-        }
+        },
+        undefined,
+        this.chunkCb(currentReviewer.name)
       );
 
       const reviewMsg = this.toMessage("reviewer", currentReviewer.name, turn, "review", reviewResponse);
@@ -321,7 +338,8 @@ export class Orchestrator {
         workingDirectory: this.config.workingDirectory,
         systemPrompt: userGuidancePrompt(this.agentB.name),
       },
-      signal
+      signal,
+      this.chunkCb(this.agentA.name)
     );
     const msgA = this.toMessage("initiator", this.agentA.name, turn, "review", responseA);
     messages.push(msgA);
@@ -344,7 +362,8 @@ export class Orchestrator {
           workingDirectory: this.config.workingDirectory,
           systemPrompt: rebuttalPrompt(currentInitiator.name),
         },
-        signal
+        signal,
+        this.chunkCb(currentReviewer.name)
       );
 
       const reviewMsg = this.toMessage("reviewer", currentReviewer.name, turn, "review", reviewResponse);
@@ -430,8 +449,8 @@ export class Orchestrator {
     const ctx = { sessionId, history: messagesBeforeEsc, workingDirectory: this.config.workingDirectory, systemPrompt: escPrompt };
 
     const [resultA, resultB] = await Promise.allSettled([
-      this.agentA.send(prompt, ctx, signal),
-      this.agentB.send(prompt, ctx, signal),
+      this.agentA.send(prompt, ctx, signal, this.chunkCb(this.agentA.name)),
+      this.agentB.send(prompt, ctx, signal, this.chunkCb(this.agentB.name)),
     ]);
 
     // If either call was aborted (user cancellation), re-throw immediately
