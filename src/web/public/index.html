@@ -7,7 +7,90 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div id="app">Loading...</div>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon">tg</div>
+          <span class="logo-text">topg</span>
+          <span class="logo-version">v1.0.0</span>
+        </div>
+        <button id="new-debate-btn" class="new-debate-btn">
+          <span class="plus">+</span> New debate <span class="shortcut">N</span>
+        </button>
+      </div>
+      <div id="session-list" class="session-list">
+        <!-- Sessions rendered by JS -->
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main" id="main">
+      <!-- Empty state (shown by default) -->
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">tg</div>
+        <p>Select a session or start a new debate</p>
+      </div>
+
+      <!-- Debate viewer (hidden by default) -->
+      <div id="debate-viewer" class="debate-viewer" style="display:none">
+        <div class="debate-header" id="debate-header">
+          <span id="debate-prompt" class="prompt-text"></span>
+          <span id="debate-status" class="status-badge"></span>
+          <div class="header-actions">
+            <button id="pause-btn" class="header-btn" style="display:none">Pause</button>
+            <button id="resume-btn" class="header-btn" style="display:none">Resume</button>
+            <button id="artifacts-btn" class="header-btn" style="display:none">Artifacts</button>
+          </div>
+        </div>
+        <div class="convergence-bar" id="convergence-bar">
+          <span class="convergence-label">Progress</span>
+          <div id="convergence-track" class="convergence-track"></div>
+          <span id="convergence-rounds" class="convergence-rounds"></span>
+        </div>
+        <div id="thread" class="thread">
+          <!-- Messages rendered by JS -->
+        </div>
+        <!-- Typing indicator (hidden) -->
+        <div id="typing-indicator" class="typing-indicator" style="display:none">
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+          <span id="typing-label" class="typing-label"></span>
+        </div>
+        <!-- Outcome bar (hidden) -->
+        <div id="outcome-bar" class="outcome-bar" style="display:none"></div>
+        <!-- Guidance input (hidden) -->
+        <div id="guidance-bar" class="guidance-bar" style="display:none">
+          <textarea id="guidance-input" class="guidance-input" placeholder="Provide guidance to redirect the agents..." rows="2"></textarea>
+          <button id="guidance-send" class="send-btn">Send</button>
+        </div>
+      </div>
+
+      <!-- New debate form (hidden by default) -->
+      <div id="new-debate-form" class="new-debate-form" style="display:none">
+        <h2>New Debate</h2>
+        <textarea id="prompt-input" class="prompt-input" placeholder="What should Claude and Codex collaborate on?" rows="4" autofocus></textarea>
+        <details class="advanced-config">
+          <summary>Advanced</summary>
+          <div class="config-fields">
+            <label>Start with
+              <select id="config-start-with">
+                <option value="claude" selected>Claude</option>
+                <option value="codex">Codex</option>
+              </select>
+            </label>
+            <label>Guardrail rounds
+              <input id="config-guardrail" type="number" value="5" min="1" max="20">
+            </label>
+            <label>Timeout (seconds)
+              <input id="config-timeout" type="number" value="900" min="30" max="3600">
+            </label>
+          </div>
+        </details>
+        <button id="start-debate-btn" class="send-btn">Start Debate</button>
+      </div>
+    </main>
+  </div>
   <script src="/app.js"></script>
 </body>
 </html>
