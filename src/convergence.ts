@@ -59,7 +59,7 @@ function getSignalForMessage(msg: Message): ConvergenceSignal | null {
   return null;
 }
 
-export function detectConvergence(messages: Message[]): boolean {
+export function detectConvergence(messages: Message[], turn: number): boolean {
   const agentMessages = messages.filter((m) => m.type !== "user-prompt" && m.type !== "user-guidance");
   if (agentMessages.length < 2) return false;
   const lastByAgent = new Map<string, Message>();
@@ -69,12 +69,13 @@ export function detectConvergence(messages: Message[]): boolean {
   if (lastByAgent.size < 2) return false;
   const signals = [...lastByAgent.values()].map(getSignalForMessage);
 
-  // Strong consensus: both agree
+  // Strong consensus: both agree — works at any turn
   if (signals.every((s) => s === "agree")) return true;
 
-  // Soft consensus: one agrees and the other is partial (not disagree)
-  // This prevents endless rounds when agents mostly agree but one hedges
+  // Soft consensus: only allowed after turn 3
+  // Prevents premature exit when one agent still has concerns
   if (
+    turn > 3 &&
     signals.includes("agree") &&
     signals.every((s) => s === "agree" || s === "partial")
   ) {

@@ -40,7 +40,7 @@ describe("detectConvergence", () => {
       makeMsg("claude", "Here is my proposal.\n[CONVERGENCE: agree]", "agree"),
       makeMsg("codex", "I agree with this.\n[CONVERGENCE: agree]", "agree"),
     ];
-    expect(detectConvergence(messages)).toBe(true);
+    expect(detectConvergence(messages, 1)).toBe(true);
   });
 
   it("should not detect convergence when one disagrees", () => {
@@ -48,7 +48,7 @@ describe("detectConvergence", () => {
       makeMsg("claude", "Proposal.\n[CONVERGENCE: agree]", "agree"),
       makeMsg("codex", "I disagree.\n[CONVERGENCE: disagree]", "disagree"),
     ];
-    expect(detectConvergence(messages)).toBe(false);
+    expect(detectConvergence(messages, 5)).toBe(false);
   });
 
   it("should detect soft convergence when one agrees and other is partial", () => {
@@ -56,7 +56,7 @@ describe("detectConvergence", () => {
       makeMsg("claude", "Here is my proposal.\n[CONVERGENCE: agree]", "agree"),
       makeMsg("codex", "Mostly good, minor nit.\n[CONVERGENCE: partial]", "partial"),
     ];
-    expect(detectConvergence(messages)).toBe(true);
+    expect(detectConvergence(messages, 5)).toBe(true);
   });
 
   it("should detect convergence from phrase matching when tags are missing", () => {
@@ -64,7 +64,7 @@ describe("detectConvergence", () => {
       makeMsg("claude", "This looks good, I have no further changes."),
       makeMsg("codex", "I agree with this approach, no modifications needed."),
     ];
-    expect(detectConvergence(messages)).toBe(true);
+    expect(detectConvergence(messages, 1)).toBe(true);
   });
 
   it("should not detect convergence from ambiguous phrases", () => {
@@ -72,7 +72,39 @@ describe("detectConvergence", () => {
       makeMsg("claude", "Here is a revised version."),
       makeMsg("codex", "I have some suggestions for improvement."),
     ];
-    expect(detectConvergence(messages)).toBe(false);
+    expect(detectConvergence(messages, 5)).toBe(false);
+  });
+
+  it("should block soft consensus at turn 2", () => {
+    const messages = [
+      makeMsg("claude", "Here is my proposal.\n[CONVERGENCE: agree]", "agree"),
+      makeMsg("codex", "Mostly good, minor nit.\n[CONVERGENCE: partial]", "partial"),
+    ];
+    expect(detectConvergence(messages, 2)).toBe(false);
+  });
+
+  it("should block soft consensus at turn 3", () => {
+    const messages = [
+      makeMsg("claude", "Here is my proposal.\n[CONVERGENCE: agree]", "agree"),
+      makeMsg("codex", "Mostly good, minor nit.\n[CONVERGENCE: partial]", "partial"),
+    ];
+    expect(detectConvergence(messages, 3)).toBe(false);
+  });
+
+  it("should allow soft consensus at turn 4", () => {
+    const messages = [
+      makeMsg("claude", "Here is my proposal.\n[CONVERGENCE: agree]", "agree"),
+      makeMsg("codex", "Mostly good, minor nit.\n[CONVERGENCE: partial]", "partial"),
+    ];
+    expect(detectConvergence(messages, 4)).toBe(true);
+  });
+
+  it("should allow strong consensus at turn 1", () => {
+    const messages = [
+      makeMsg("claude", "Here is my proposal.\n[CONVERGENCE: agree]", "agree"),
+      makeMsg("codex", "I agree with this.\n[CONVERGENCE: agree]", "agree"),
+    ];
+    expect(detectConvergence(messages, 1)).toBe(true);
   });
 });
 
@@ -119,7 +151,7 @@ describe("convergence with user-prompt filtering", () => {
         timestamp: new Date().toISOString(),
       },
     ];
-    expect(detectConvergence(messages)).toBe(true);
+    expect(detectConvergence(messages, 1)).toBe(true);
   });
 
   it("should ignore user-prompt messages in diff stability check", () => {

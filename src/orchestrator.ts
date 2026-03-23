@@ -96,7 +96,7 @@ export class Orchestrator {
       this.onTurnComplete?.(reviewMsg);
 
       // Check convergence
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
         const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB });
         const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(meta.sessionId, summary);
@@ -181,7 +181,7 @@ export class Orchestrator {
       this.session.appendMessage(sessionId, reviewMsg);
       this.onTurnComplete?.(reviewMsg);
 
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
         const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB }, signal);
         const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(sessionId, summary);
@@ -260,7 +260,7 @@ export class Orchestrator {
       this.session.appendMessage(sessionId, reviewMsg);
       this.onTurnComplete?.(reviewMsg);
 
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
         const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB });
         const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(sessionId, summary);
@@ -352,7 +352,7 @@ export class Orchestrator {
       this.session.appendMessage(sessionId, reviewMsg);
       this.onTurnComplete?.(reviewMsg);
 
-      if (detectConvergence(messages) || checkDiffStability(messages)) {
+      if (detectConvergence(messages, turn) || (turn > 3 && checkDiffStability(messages))) {
         const synthesized = await this.synthesize(messages, userPrompt, { initiator: this.agentA, reviewer: this.agentB }, signal);
         const summary = synthesized || formatConsensus(messages, turn);
         this.session.saveSummary(sessionId, summary);
